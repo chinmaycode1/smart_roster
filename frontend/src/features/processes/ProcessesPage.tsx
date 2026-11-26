@@ -1,0 +1,185 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { api } from '../../lib/api';
+import { Button } from '../../components/ui/Button';
+
+interface Process {
+  id: string;
+  name: string;
+  code: string;
+  description?: string;
+  _count: { brandProcesses: number };
+}
+
+export function ProcessesPage() {
+  const queryClient = useQueryClient();
+  const [isCreating, setIsCreating] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ name: '', code: '', description: '' });
+
+  const { data: processes = [], isLoading } = useQuery<Process[]>({
+    queryKey: ['processes'],
+    queryFn: async () => {
+      const res = await api.get('/processes');
+      return res.data;
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; code: string; description?: string }) => {
+      await api.post('/processes', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['processes'] });
+      setIsCreating(false);
+      setFormData({ name: '', code: '', description: '' });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; code: string; description?: string } }) => {
+      await api.put(`/processes/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['processes'] });
+      setEditingId(null);
+      setFormData({ name: '', code: '', description: '' });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await api.delete(`/processes/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['processes'] });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, data: formData });
+    } else {
+      createMutation.mutate(formData);
+    }
+  };
+
+  const handleEdit = (process: Process) => {
+    setEditingId(process.id);
+    setFormData({ name: process.name, code: process.code, description: process.description || '' });
+    setIsCreating(true);
+  };
+
+  const handleCancel = () => {
+    setIsCreating(false);
+    setEditingId(null);
+    setFormData({ name: '', code: '', description: '' });
+  };
+
+  if (isLoading) {
+    return <div className="p-8">Loading...</div>;
+  }
+
+  return (
+    <div className="p-8">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold text-gray-900">Processes</h1>
+        {!isCreating && (
+          <Button onClick={() => setIsCreating(true)}>Create Process</Button>
+        )}
+      </div>
+
+      {isCreating && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">
+          <h2 className="text-lg font-medium mb-4">{editingId ? 'Edit Process' : 'New Process'}</h2>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Name
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Code
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Description
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button type="submit">{editingId ? 'Update' : 'Create'}</Button>
+              <Button type="button" variant="ghost" onClick={handleCancel}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="bg-white rounded-lg border border-gray-200">
+        <table className="w-full">
+          <thead className="border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brands</th>
+              <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {processes.map((process) => (
+              <tr key={process.id}>
+                <td className="px-6 py-4 text-sm text-gray-900">{process.code}</td>
+                <td className="px-6 py-4 text-sm text-gray-900">{process.name}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{process.description || '-'}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{process._count.brandProcesses}</td>
+                <td className="px-6 py-4 text-right text-sm space-x-2">
+                  <button
+                    onClick={() => handleEdit(process)}
+                    className="text-blue-600 hover:text-blue-800"
+                  >
+                    Edit
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm('Delete this process?')) {
+                        deleteMutation.mutate(process.id);
+                      }
+                    }}
+                    className="text-red-600 hover:text-red-800"
+                  >
+                    Delete
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

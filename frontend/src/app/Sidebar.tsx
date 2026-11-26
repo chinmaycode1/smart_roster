@@ -5,7 +5,6 @@ import {
   Boxes,
   FileText,
   Calendar,
-  AlertCircle,
   BarChart3,
   Settings,
 } from 'lucide-react';
@@ -15,11 +14,10 @@ const navItems = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
   { path: '/employees', label: 'Employees', icon: Users },
   { path: '/pods', label: 'Pods', icon: Boxes },
+  { path: '/processes', label: 'Processes', icon: Settings },
   { path: '/brands', label: 'Brands', icon: FileText },
   { path: '/roster', label: 'Roster', icon: Calendar },
-  { path: '/conflicts', label: 'Conflicts', icon: AlertCircle },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
-  { path: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {

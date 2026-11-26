@@ -1,6 +1,7 @@
 import { getAllDatesInMonth } from '../../lib/dates.js';
 import { buildDemandMap } from '../demand/coverageDemand.js';
 import { planWeeklyOffs } from './weeklyOffPlanner.js';
+import { validateRoster } from '../validator/validateRoster.js';
 import type {
   GenerationContext,
   GenerationResult,
@@ -16,21 +17,17 @@ export function generateRoster(context: GenerationContext): GenerationResult {
   const entries: RosterEntryData[] = [...lockedEntries];
   const demandMap = buildDemandMap(dates, brandProcesses, holidays);
 
-  // Build a map of employee weekly offs
   const employeeWeeklyOffMap = planWeeklyOffs(dates, employees, brandProcesses, holidays);
 
-  // Build base entries: holidays, leaves, comp-offs, weekly offs
   for (const employee of employees) {
     for (const date of dates) {
       const dateKey = date.toISOString().split('T')[0];
 
-      // Skip if locked entry exists
       const locked = lockedEntries.find(
         (e) => e.employeeId === employee.id && e.date.toDateString() === date.toDateString()
       );
       if (locked) continue;
 
-      // Check leaves
       const hasApprovedLeave = employee.leaves.some(
         (leave) =>
           leave.status === 'APPROVED' &&
@@ -48,7 +45,6 @@ export function generateRoster(context: GenerationContext): GenerationResult {
         continue;
       }
 
-      // Check comp-offs
       const compOff = employee.compOffs.find(
         (co) =>
           co.status === 'REDEEMED' &&
@@ -66,7 +62,6 @@ export function generateRoster(context: GenerationContext): GenerationResult {
         continue;
       }
 
-      // Check fixed weekly offs
       if (employee.weeklyOffPattern && employee.weeklyOffPattern.isFixed) {
         const weekday = date.getDay();
         if (employee.weeklyOffPattern.fixedOffDays.includes(weekday)) {
@@ -81,7 +76,6 @@ export function generateRoster(context: GenerationContext): GenerationResult {
         }
       }
 
-      // Check planned weekly off
       const weeklyOffDates = employeeWeeklyOffMap.get(employee.id) || new Set();
       if (weeklyOffDates.has(dateKey)) {
         entries.push({
@@ -94,12 +88,10 @@ export function generateRoster(context: GenerationContext): GenerationResult {
         continue;
       }
 
-      // Check if holiday (but employee might still work)
       const isHoliday = holidays.some(
         (h) => h.date.toDateString() === date.toDateString()
       );
 
-      // Determine if employee should work
       const shouldWork = shouldEmployeeWork(
         employee,
         date,
@@ -137,9 +129,11 @@ export function generateRoster(context: GenerationContext): GenerationResult {
     }
   }
 
+  const conflicts = validateRoster(entries, context);
+
   return {
     entries,
-    conflicts: [],
+    conflicts,
   };
 }
 

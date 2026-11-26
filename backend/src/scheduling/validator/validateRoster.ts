@@ -1,42 +1,49 @@
 import type { RosterEntryData, ConflictData, GenerationContext } from '../types.js';
+import {
+  checkDuplicateEntries,
+  checkInsufficientCoverage,
+  checkWeeklyOffViolations,
+  checkLeaveClashes,
+  checkSoleOwnerUnavailable,
+  checkFixedOffDayViolations,
+  checkOverlappingShifts,
+} from './rules/index.js';
 
 export function validateRoster(
   entries: RosterEntryData[],
-  _context: GenerationContext
+  context: GenerationContext
 ): ConflictData[] {
-  const conflicts: ConflictData[] = [];
+  const allConflicts: ConflictData[] = [];
 
-  // Basic validation placeholder - full rules would be in separate files
-  // For MVP, just check for basic data integrity
+  const rules = [
+    checkDuplicateEntries,
+    checkLeaveClashes,
+    checkFixedOffDayViolations,
+    checkWeeklyOffViolations,
+    checkSoleOwnerUnavailable,
+    checkInsufficientCoverage,
+    checkOverlappingShifts,
+  ];
 
-  const entriesByEmployee = groupBy(entries, (e) => e.employeeId);
+  for (const rule of rules) {
+    const conflicts = rule(entries, context);
+    allConflicts.push(...conflicts);
+  }
 
-  for (const [employeeId, empEntries] of Object.entries(entriesByEmployee)) {
-    // Check for duplicate entries
-    const dateKeys = empEntries.map((e) => e.date.toISOString().split('T')[0]);
-    const unique = new Set(dateKeys);
-    if (dateKeys.length !== unique.size) {
-      conflicts.push({
-        severity: 'ERROR',
-        code: 'DUPLICATE_ENTRY',
-        employeeId,
-        message: `Employee has duplicate entries for the same date`,
-        suggestedActions: [],
-      });
+  return deduplicateConflicts(allConflicts);
+}
+
+function deduplicateConflicts(conflicts: ConflictData[]): ConflictData[] {
+  const seen = new Set<string>();
+  const unique: ConflictData[] = [];
+
+  for (const conflict of conflicts) {
+    const key = `${conflict.code}_${conflict.employeeId || ''}_${conflict.brandProcessId || ''}_${conflict.date?.toISOString().split('T')[0] || ''}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(conflict);
     }
   }
 
-  return conflicts;
-}
-
-function groupBy<T>(array: T[], keyFn: (item: T) => string): Record<string, T[]> {
-  return array.reduce(
-    (acc, item) => {
-      const key = keyFn(item);
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(item);
-      return acc;
-    },
-    {} as Record<string, T[]>
-  );
+  return unique;
 }
