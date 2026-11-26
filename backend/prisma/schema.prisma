@@ -1,0 +1,373 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Pod {
+  id             String     @id @default(cuid())
+  name           String     @unique
+  leadEmployeeId String?    @unique
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  employees      Employee[] @relation("PodEmployees")
+  lead           Employee?  @relation("PodLead", fields: [leadEmployeeId], references: [id])
+
+  @@index([name])
+}
+
+model Employee {
+  id                     String            @id @default(cuid())
+  code                   String            @unique
+  name                   String
+  email                  String            @unique
+  podId                  String
+  role                   Role              @default(EMPLOYEE)
+  isActive               Boolean           @default(true)
+  maxConsecutiveWorkDays Int               @default(6)
+  joinedOn               DateTime          @default(now())
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+  assignments            Assignment[]
+  auditLogs              AuditLog[]
+  compOffs               CompOff[]
+  pod                    Pod               @relation("PodEmployees", fields: [podId], references: [id])
+  leaves                 Leave[]
+  leadingPod             Pod?              @relation("PodLead")
+  preferences            Preference[]
+  rosterEntries          RosterEntry[]
+  weeklyOffPattern       WeeklyOffPattern?
+
+  @@index([podId])
+  @@index([email])
+  @@index([code])
+  @@index([isActive])
+}
+
+model Brand {
+  id             String         @id @default(cuid())
+  name           String         @unique
+  code           String         @unique
+  isActive       Boolean        @default(true)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  brandProcesses BrandProcess[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model Process {
+  id             String         @id @default(cuid())
+  name           String         @unique
+  code           String         @unique
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  brandProcesses BrandProcess[]
+
+  @@index([code])
+}
+
+model Shift {
+  id             String         @id @default(cuid())
+  name           String         @unique
+  startTime      String
+  endTime        String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  brandProcesses BrandProcess[]
+
+  @@index([name])
+}
+
+model OperatingRule {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  type            OperatingRuleType
+  workingWeekdays Int[]
+  worksOnHolidays Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  brandProcesses  BrandProcess[]
+
+  @@index([type])
+}
+
+model BrandProcess {
+  id                 String             @id @default(cuid())
+  brandId            String
+  processId          String
+  operatingRuleId    String
+  shiftId            String?
+  defaultMinCoverage Int                @default(1)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  assignments        Assignment[]
+  brand              Brand              @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  operatingRule      OperatingRule      @relation(fields: [operatingRuleId], references: [id])
+  process            Process            @relation(fields: [processId], references: [id], onDelete: Cascade)
+  shift              Shift?             @relation(fields: [shiftId], references: [id])
+  conflicts          Conflict[]
+  coverageOverrides  CoverageOverride[]
+
+  @@unique([brandId, processId])
+  @@index([brandId])
+  @@index([processId])
+  @@index([operatingRuleId])
+}
+
+model Assignment {
+  id                String       @id @default(cuid())
+  employeeId        String
+  brandProcessId    String
+  allocationPercent Int          @default(100)
+  isPrimary         Boolean      @default(true)
+  startDate         DateTime?
+  endDate           DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  brandProcess      BrandProcess @relation(fields: [brandProcessId], references: [id], onDelete: Cascade)
+  employee          Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([brandProcessId])
+  @@index([startDate])
+  @@index([endDate])
+}
+
+model CoverageOverride {
+  id             String       @id @default(cuid())
+  brandProcessId String
+  date           DateTime?
+  weekday        Int?
+  minCoverage    Int
+  reason         String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  brandProcess   BrandProcess @relation(fields: [brandProcessId], references: [id], onDelete: Cascade)
+
+  @@index([brandProcessId])
+  @@index([date])
+}
+
+model PublicHoliday {
+  id        String   @id @default(cuid())
+  date      DateTime @unique
+  name      String
+  region    String   @default("India")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+  @@index([region])
+}
+
+model WeeklyOffPattern {
+  id               String   @id @default(cuid())
+  employeeId       String   @unique
+  preferredOffDays Int[]
+  fixedOffDays     Int[]
+  isFixed          Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  employee         Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+}
+
+model Leave {
+  id         String      @id @default(cuid())
+  employeeId String
+  startDate  DateTime
+  endDate    DateTime
+  type       LeaveType   @default(PLANNED)
+  status     LeaveStatus @default(PENDING)
+  reason     String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([status])
+}
+
+model CompOff {
+  id         String        @id @default(cuid())
+  employeeId String
+  earnedOn   DateTime
+  redeemOn   DateTime?
+  status     CompOffStatus @default(EARNED)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  employee   Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([earnedOn])
+  @@index([redeemOn])
+  @@index([status])
+}
+
+model Preference {
+  id         String   @id @default(cuid())
+  employeeId String
+  type       String
+  value      String
+  weight     Int      @default(1)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([type])
+}
+
+model Roster {
+  id              String        @id @default(cuid())
+  month           Int
+  year            Int
+  version         Int           @default(1)
+  status          RosterStatus  @default(DRAFT)
+  generatedAt     DateTime      @default(now())
+  publishedAt     DateTime?
+  parentVersionId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  auditLogs       AuditLog[]
+  conflicts       Conflict[]
+  parentVersion   Roster?       @relation("RosterVersions", fields: [parentVersionId], references: [id])
+  childVersions   Roster[]      @relation("RosterVersions")
+  entries         RosterEntry[]
+
+  @@unique([month, year, version])
+  @@index([month, year])
+  @@index([status])
+  @@index([parentVersionId])
+}
+
+model RosterEntry {
+  id         String            @id @default(cuid())
+  rosterId   String
+  employeeId String
+  date       DateTime
+  status     RosterEntryStatus
+  source     RosterEntrySource @default(GENERATED)
+  isLocked   Boolean           @default(false)
+  note       String?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  employee   Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  roster     Roster            @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+
+  @@unique([rosterId, employeeId, date])
+  @@index([rosterId])
+  @@index([employeeId])
+  @@index([date])
+  @@index([status])
+}
+
+model Conflict {
+  id               String           @id @default(cuid())
+  rosterId         String
+  severity         ConflictSeverity
+  code             String
+  brandProcessId   String?
+  employeeId       String?
+  date             DateTime?
+  message          String
+  suggestedActions Json
+  resolvedAt       DateTime?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  brandProcess     BrandProcess?    @relation(fields: [brandProcessId], references: [id])
+  roster           Roster           @relation(fields: [rosterId], references: [id], onDelete: Cascade)
+
+  @@index([rosterId])
+  @@index([severity])
+  @@index([code])
+  @@index([brandProcessId])
+  @@index([employeeId])
+  @@index([date])
+  @@index([resolvedAt])
+}
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  entityType String
+  entityId   String
+  action     String
+  actorRole  String    @default("SYSTEM")
+  actorId    String?
+  before     Json?
+  after      Json?
+  createdAt  DateTime  @default(now())
+  actor      Employee? @relation(fields: [actorId], references: [id])
+  roster     Roster    @relation(fields: [entityId], references: [id], onDelete: Cascade)
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([actorId])
+}
+
+enum Role {
+  EMPLOYEE
+  POD_LEAD
+}
+
+enum OperatingRuleType {
+  ALL_365
+  DAILY_EXCEPT_HOLIDAYS
+  EXCEPT_SUNDAYS_AND_HOLIDAYS
+  CUSTOM_WEEKDAYS
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum LeaveType {
+  SICK
+  CASUAL
+  PLANNED
+  EMERGENCY
+}
+
+enum CompOffStatus {
+  EARNED
+  REDEEMED
+  EXPIRED
+}
+
+enum RosterStatus {
+  DRAFT
+  PENDING_APPROVAL
+  PUBLISHED
+  ARCHIVED
+}
+
+enum RosterEntryStatus {
+  WORKING
+  WEEKLY_OFF
+  LEAVE
+  HOLIDAY
+  COMP_OFF
+}
+
+enum RosterEntrySource {
+  GENERATED
+  MANUAL
+}
+
+enum ConflictSeverity {
+  ERROR
+  WARNING
+}
