@@ -369,7 +369,7 @@ export function RosterPage() {
                   <tr key={employee.id} className="hover:bg-gray-50">
                     <td className="sticky left-0 bg-white z-10 px-4 py-3 text-sm font-medium text-gray-900 border-r">
                       <div className="text-sm font-medium text-gray-900">{employee.name}</div>
-                      <div className="text-xs text-gray-500">{employee.pod.name}</div>
+                      <div className="text-xs text-gray-500">{employee.pod?.name || 'No Pod'}</div>
                     </td>
                     {days.map((day) => {
                       const entry = entriesGrouped.get(employee.id)?.get(day);

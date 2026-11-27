@@ -2,13 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/apiClient';
 import { Button } from '../../components/ui/Button';
-
-interface Brand {
-  id: string;
-  name: string;
-  code: string;
-  _count: { brandProcesses: number };
-}
+import type { Brand } from '../../types/api';
 
 export function BrandsPage() {
   const queryClient = useQueryClient();
@@ -143,7 +137,7 @@ export function BrandsPage() {
               <tr key={brand.id}>
                 <td className="px-6 py-4 text-sm text-gray-900">{brand.code}</td>
                 <td className="px-6 py-4 text-sm text-gray-900">{brand.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{brand._count.brandProcesses}</td>
+                <td className="px-6 py-4 text-sm text-gray-500">{brand._count?.brandProcesses || 0}</td>
                 <td className="px-6 py-4 text-right text-sm space-x-2">
                   <button
                     onClick={() => handleEdit(brand)}

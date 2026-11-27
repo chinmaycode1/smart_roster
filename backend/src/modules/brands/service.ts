@@ -4,6 +4,9 @@ import type { CreateBrandInput } from './schema.js';
 export async function fetchBrands() {
   return prisma.brand.findMany({
     include: {
+      _count: {
+        select: { brandProcesses: true },
+      },
       brandProcesses: {
         include: {
           process: true,
