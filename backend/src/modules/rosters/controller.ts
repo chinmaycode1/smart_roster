@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import * as rosterService from './service.js';
-import { generateRosterSchema, updateEntrySchema } from './schema.js';
+import { generateRosterSchema, updateEntrySchema, changeImpactSchema, approvalActionSchema } from './schema.js';
 
 export async function generateRoster(req: Request, res: Response) {
   const data = generateRosterSchema.parse(req.body);
@@ -28,7 +28,8 @@ export async function updateEntry(req: Request, res: Response) {
 }
 
 export async function analyzeImpact(req: Request, res: Response) {
-  const impact = await rosterService.analyzeChangeImpact(req.params.id, req.body);
+  const data = changeImpactSchema.parse(req.body);
+  const impact = await rosterService.analyzeChangeImpact(req.params.id, data);
   res.json(impact);
 }
 
@@ -45,4 +46,39 @@ export async function getConflicts(req: Request, res: Response) {
 export async function publishRoster(req: Request, res: Response) {
   const roster = await rosterService.publishRoster(req.params.id);
   res.json(roster);
+}
+
+export async function requestApproval(req: Request, res: Response) {
+  const data = approvalActionSchema.parse(req.body);
+  const roster = await rosterService.requestApproval(req.params.id, data.actorId);
+  res.json(roster);
+}
+
+export async function approveRoster(req: Request, res: Response) {
+  const data = approvalActionSchema.parse(req.body);
+  const roster = await rosterService.approveRoster(req.params.id, data.actorId);
+  res.json(roster);
+}
+
+export async function rejectRoster(req: Request, res: Response) {
+  const data = approvalActionSchema.parse(req.body);
+  const roster = await rosterService.rejectRoster(req.params.id, data.reason || 'No reason provided', data.actorId);
+  res.json(roster);
+}
+
+export async function getAuditLogs(req: Request, res: Response) {
+  const logs = await rosterService.getAuditLogs(req.params.id);
+  res.json(logs);
+}
+
+export async function compareVersions(req: Request, res: Response) {
+  const diff = await rosterService.compareVersions(req.params.id, req.params.compareToId);
+  res.json(diff);
+}
+
+export async function exportCSV(req: Request, res: Response) {
+  const csv = await rosterService.exportRosterCSV(req.params.id);
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', `attachment; filename=roster-${req.params.id}.csv`);
+  res.send(csv);
 }
