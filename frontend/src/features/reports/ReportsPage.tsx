@@ -66,7 +66,7 @@ export function ReportsPage() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Report Type</label>
             <select
               value={reportType}
-              onChange={(e) => setReportType(e.target.value as any)}
+              onChange={(e) => setReportType(e.target.value as 'fairness' | 'coverage')}
               className="px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="fairness">Fairness</option>

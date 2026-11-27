@@ -131,7 +131,7 @@ export function RosterPage() {
       const res = await api.post(`/rosters/${currentRosterId}/repair`);
       return res.data;
     },
-    onSuccess: (data: { applied: boolean; changes?: any[]; reason?: string }) => {
+    onSuccess: (data: { applied: boolean; changes?: Array<Record<string, unknown>>; reason?: string }) => {
       if (data.applied) {
         alert(`Repair applied: ${data.changes?.length || 0} changes made`);
         queryClient.invalidateQueries({ queryKey: ['roster-entries', currentRosterId] });
