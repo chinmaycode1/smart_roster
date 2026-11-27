@@ -303,18 +303,3 @@ npm run preview    # Preview production build
    DIRECT_URL=<supabase-direct-url>
    ```
 5. Run migrations: `npx prisma migrate deploy`
-
-## License
-
-MIT
-
-## Contributing
-
-This is a demonstration project. For production use, consider:
-- Shift-level scheduling with time granularity
-- Real-time collaboration via WebSockets
-- Advanced fairness optimization
-- Mobile-responsive roster grid
-- Role-based access control
-- Notification system
-- Audit log UI

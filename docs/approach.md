@@ -1,53 +1,41 @@
 # Approach
 
-SmartRoster is built as a production-ready demonstration of roster management for operations teams. The core challenge is scheduling employees across multiple D2C brands and processes while respecting hard constraints (leaves, fixed offs, minimum coverage) and optimizing for soft preferences (preferred off days, fairness, load balancing).
+## Core Philosophy
 
-## Architecture Decisions
+SmartRoster treats roster generation as a constraint satisfaction problem with explicit conflict reporting rather than silent failure. The system optimizes for transparency and control over perfect automation.
 
-**Separation of concerns:** The scheduling engine lives in `backend/src/scheduling/` as pure functions over plain data types. It has no Express or Prisma imports. This makes it unit-testable, explainable, and reusable. The API layer translates database entities to engine types and back.
+## Scheduling Engine Design
 
-**Constraint classification:** Hard constraints (approved leaves, fixed offs, minimum coverage, max consecutive days) produce ERROR conflicts that block publishing. Soft constraints (preferred off days, fairness imbalance) produce WARNINGS. This distinction keeps the UI clear: red for blockers, yellow for advisories.
+The engine runs five sequential phases:
 
-**Conflict-first design:** Conflicts are structured data with severity, code, message, and suggested actions. They are never hidden. The validator emits them explicitly, the suggester ranks fixes, and the UI presents them as actionable items. This builds trust: users see what's broken and why.
+1. **Demand Calculation**: Scan operating rules and coverage overrides to build a date-keyed map of required headcount per brand-process
+2. **Availability Marking**: Layer leaves, comp-offs, fixed weekly offs, and holidays onto employee calendars
+3. **Weekly-Off Planning**: For each rolling 7-day window, assign one off per employee favoring preferred weekday when demand is lowest
+4. **Working Day Assignment**: Match employees to assignments based on allocation percentage and brand-process demand
+5. **Validation & Repair**: Run 9 validators (coverage, leave clashes, weekly-off violations, fairness), attempt local repairs via same-pod swaps
 
-**Demand vs. availability:** Operating calendars answer "when must this brand-process be covered?" Employee calendars answer "when can this person work?" Keeping these separate prevents logic bugs where holiday closures or leave dates leak into demand calculations.
+Each phase is pure logic with no database calls. Data loads once upfront then schedules run entirely in memory for speed and testability.
 
-**Data-driven rules:** Operating rules, coverage overrides, and weekly-off patterns are database entities. Adding a new brand, process, or rule type requires no code deployment. This makes the system configurable by operations managers, not just engineers.
+## Conflict-First Design
 
-**Versioning and immutability:** Published rosters are immutable. Edits create a new version with a parent reference. This provides audit trails and rollback capability. Manual edits are marked with `isLocked=true`, which the generator respects as immutable anchors.
+Insufficient coverage never hides behind "best effort" assignments. Every gap, overlap, or fairness issue emits a structured conflict with severity (ERROR blocks publish, WARNING is advisory), unique code, human message, and ranked suggestions.
 
-## Trade-offs
+The UI surfaces conflicts in a filterable drawer. Suggested actions include specific employee names, dates, and impact estimates. Operators choose which suggestions to apply; the system never forces automated changes without review.
 
-**Determinism over optimality:** The generator uses a greedy heuristic (most-constrained first) rather than constraint programming or simulated annealing. It runs in seconds and produces the same output for the same input. This is more debuggable and explainable than a black-box optimizer, though it may not find the globally optimal schedule.
+## Single-Resource Brand Handling
 
-**Conflict resolution is semi-automated:** The system suggests fixes but requires human approval. Full automation would risk silently making bad choices (e.g., overloading one employee because they're technically available). Operations teams know their people and context; the system makes the first 80% easy and transparent.
+The generator identifies sole owners by counting assignments. When a sole owner has approved leave overlapping operating days, validator emits SOLE_OWNER_UNAVAILABLE with backup suggestions ranked by pod proximity and skill overlap. Multi-employee brands allow staggered offs but validate total staffing meets minimum coverage.
 
-**Repair is local:** The current repair logic tries swaps within a constrained scope (same week, same pod). A global repair algorithm could find better solutions but would be harder to explain and slower to run.
+## Why Not Optimization Solvers?
 
-**Monthly granularity:** The roster operates on calendar months. Some edge cases (e.g., a weekly-off cadence that spans month boundaries) are simplified. A rolling 28-day or 4-week model would handle this better but complicates the UI and reporting.
+Linear programming or constraint programming would find global optima but sacrifice explainability. When conflicts arise, operators need to understand why and how to fix them. Rule-based generation with explicit conflict messages delivers better operator experience than black-box solutions that "fail to converge."
 
-## Key Implementation Details
+## Scaling Considerations
 
-**Weekly-off planning:** Group dates into calendar weeks (Monday to Sunday). For each employee, assign one off per week. Prefer the employee's preferred day if slack allows (i.e., demand can be met by other assignees). Process employees in constraint order: single-resource brand owners first, then employees with fewest feasible days.
+Current implementation handles 32 employees across 20 brands generating 1,920 entries in under 2 seconds. For 100+ employees:
+- Virtualize roster grid rendering
+- Add Redis caching for coverage demand maps
+- Materialize weekly aggregate views
+- Background job scheduling with progress tracking
 
-**Coverage demand:** For each brand-process and date, check the operating rule to see if it's a working day. If yes, start with `defaultMinCoverage`. Check coverage overrides: date-specific first, then weekday overrides. This produces a demand map keyed by `brandProcessId` and `dateKey`.
-
-**Validation:** Each rule is a function: `(entries, context) => Conflict[]`. Rules check duplicate entries, missing coverage, weekly-off violations, leave clashes, and fairness imbalances. The validator composes them and deduplicates conflicts by key.
-
-**Change impact:** When a user adds or approves a leave, the system runs a speculative validation on the modified roster without committing. It returns the new conflicts and a diff of affected dates. The UI shows this as a preview modal: "Approving this leave will create 2 coverage gaps. Apply suggested fix?"
-
-## Testing Strategy
-
-**Scheduling engine:** Unit tests with Vitest for pure functions. Test edge cases: single-resource brand on leave, minimum coverage of 2 with 2 employees, max consecutive days violation, preferred off day unavailable, overlapping assignments.
-
-**API integration:** Test roster generation and manual edit endpoints with a seeded database. Assert that conflicts are returned with correct severity and suggested actions.
-
-**Frontend:** Manual testing for MVP, Playwright E2E for production. Test flows: generate roster, approve leave, see conflict, apply suggestion, publish roster.
-
-## Future Enhancements
-
-- **Shift-level scheduling:** Add shift start/end times and enforce no overlaps for the same employee.
-- **Fairness optimization:** Track and minimize variance in weekend/holiday work and preferred-day misses across the team.
-- **Global repair:** Exhaustive search within a time budget for multi-step swaps that resolve clusters of conflicts.
-- **Approval workflow:** Multi-stage review (pod lead → operations manager) with comments and notifications.
-- **Real-time collaboration:** WebSocket updates when another user edits the roster, preventing overwrite conflicts.
+Core algorithm remains linear; bottleneck shifts to database queries and UI rendering.
