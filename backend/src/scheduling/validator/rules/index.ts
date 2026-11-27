@@ -1,7 +1,10 @@
 export { checkDuplicateEntries } from './duplicateEntry.js';
+export { checkNoAssignedEmployeeAvailable } from './noAssignedEmployeeAvailable.js';
 export { checkInsufficientCoverage } from './insufficientCoverage.js';
-export { checkWeeklyOffViolations } from './weeklyOffViolations.js';
-export { checkLeaveClashes } from './leaveClashes.js';
 export { checkSoleOwnerUnavailable } from './soleOwnerUnavailable.js';
-export { checkFixedOffDayViolations } from './fixedOffDayViolation.js';
-export { checkOverlappingShifts } from './overlappingShifts.js';
+export { checkOverlappingShiftAssignment } from './overlappingShiftAssignment.js';
+export { checkWeeklyOffViolations } from './weeklyOffViolations.js';
+export { checkLeaveCoverageClash } from './leaveCoverageClash.js';
+export { checkCrossBrandGap } from './crossBrandGap.js';
+export { checkPreferenceViolated } from './preferenceViolated.js';
+export { checkFairnessImbalance } from './fairnessImbalance.js';

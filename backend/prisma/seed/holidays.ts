@@ -25,9 +25,12 @@ export async function seedHolidays(prisma: PrismaClient) {
     { date: new Date('2026-12-25'), name: 'Christmas', region: 'India' },
   ];
 
-  const holidays = await Promise.all(
-    holidayData.map((holiday) => prisma.publicHoliday.create({ data: holiday }))
-  );
+  // Create holidays sequentially to avoid connection pool limits
+  const holidays = [];
+  for (const holiday of holidayData) {
+    const created = await prisma.publicHoliday.create({ data: holiday });
+    holidays.push(created);
+  }
 
   return { holidays };
 }

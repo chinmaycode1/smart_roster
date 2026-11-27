@@ -24,9 +24,12 @@ export async function seedBrands(prisma: PrismaClient) {
     { name: 'BloomField Gardens', code: 'BFG' },
   ];
 
-  const brands = await Promise.all(
-    brandData.map((brand) => prisma.brand.create({ data: brand }))
-  );
+  // Create brands sequentially to avoid connection pool limits
+  const brands = [];
+  for (const brand of brandData) {
+    const created = await prisma.brand.create({ data: brand });
+    brands.push(created);
+  }
 
   return { brands };
 }

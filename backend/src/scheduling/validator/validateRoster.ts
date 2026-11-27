@@ -1,12 +1,15 @@
 import type { RosterEntryData, ConflictData, GenerationContext } from '../types.js';
 import {
   checkDuplicateEntries,
+  checkNoAssignedEmployeeAvailable,
   checkInsufficientCoverage,
-  checkWeeklyOffViolations,
-  checkLeaveClashes,
   checkSoleOwnerUnavailable,
-  checkFixedOffDayViolations,
-  checkOverlappingShifts,
+  checkOverlappingShiftAssignment,
+  checkWeeklyOffViolations,
+  checkLeaveCoverageClash,
+  checkCrossBrandGap,
+  checkPreferenceViolated,
+  checkFairnessImbalance,
 } from './rules/index.js';
 
 export function validateRoster(
@@ -17,12 +20,15 @@ export function validateRoster(
 
   const rules = [
     checkDuplicateEntries,
-    checkLeaveClashes,
-    checkFixedOffDayViolations,
-    checkWeeklyOffViolations,
+    checkLeaveCoverageClash,
+    checkNoAssignedEmployeeAvailable,
     checkSoleOwnerUnavailable,
     checkInsufficientCoverage,
-    checkOverlappingShifts,
+    checkWeeklyOffViolations,
+    checkOverlappingShiftAssignment,
+    checkCrossBrandGap,
+    checkPreferenceViolated,
+    checkFairnessImbalance,
   ];
 
   for (const rule of rules) {

@@ -275,9 +275,12 @@ export async function seedEmployees(prisma: PrismaClient) {
     },
   ];
 
-  const employees = await Promise.all(
-    employeeData.map((emp) => prisma.employee.create({ data: emp }))
-  );
+  // Create employees sequentially to avoid connection pool limits
+  const employees = [];
+  for (const emp of employeeData) {
+    const created = await prisma.employee.create({ data: emp });
+    employees.push(created);
+  }
 
   await prisma.pod.update({
     where: { id: pods[0].id },
