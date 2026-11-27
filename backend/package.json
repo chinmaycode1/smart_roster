@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/server.js",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
@@ -26,6 +26,8 @@
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",
     "pino-pretty": "^13.2.0",
+    "prisma": "^5.22.0",
+    "typescript": "^5.6.3",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -36,9 +38,7 @@
     "@typescript-eslint/parser": "^7.18.0",
     "eslint": "^8.57.1",
     "prettier": "^3.3.3",
-    "prisma": "^5.22.0",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
     "vitest": "^2.1.8"
   }
 }
