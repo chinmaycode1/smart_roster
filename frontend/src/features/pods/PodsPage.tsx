@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { api } from '../../lib/apiClient';
 import { Button } from '../../components/ui/Button';
 
 interface Pod {
@@ -16,10 +16,10 @@ export function PodsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '' });
 
-  const { data: pods = [], isLoading } = useQuery<Pod[]>({
+  const { data: pods, isLoading } = useQuery({
     queryKey: ['pods'],
     queryFn: async () => {
-      const res = await api.get('/pods');
+      const res = await api.get<Pod[]>('/pods');
       return res.data;
     },
   });
@@ -76,10 +76,6 @@ export function PodsPage() {
     setFormData({ name: '', code: '' });
   };
 
-  if (isLoading) {
-    return <div className="p-8">Loading...</div>;
-  }
-
   return (
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
@@ -128,7 +124,12 @@ export function PodsPage() {
       )}
 
       <div className="bg-white rounded-lg border border-gray-200">
-        <table className="w-full">
+        {isLoading ? (
+          <div className="p-8 text-center text-gray-500">Loading...</div>
+        ) : !pods || pods.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">No pods found</div>
+        ) : (
+          <table className="w-full">
           <thead className="border-b border-gray-200">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
@@ -165,6 +166,7 @@ export function PodsPage() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
     </div>
   );

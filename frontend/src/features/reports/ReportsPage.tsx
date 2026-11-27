@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { api } from '../../lib/apiClient';
 import { Button } from '../../components/ui/Button';
 
 interface FairnessMetric {
@@ -23,19 +23,19 @@ export function ReportsPage() {
   const [rosterId, setRosterId] = useState('');
   const [reportType, setReportType] = useState<'fairness' | 'coverage'>('fairness');
 
-  const { data: fairnessReport } = useQuery<{ metrics: FairnessMetric[]; imbalanceLevel: string; recommendations: string[] }>({
+  const { data: fairnessReport } = useQuery({
     queryKey: ['fairness-report', rosterId],
     queryFn: async () => {
-      const res = await api.get(`/reports/fairness/${rosterId}`);
+      const res = await api.get<{ metrics: FairnessMetric[]; imbalanceLevel: string; recommendations: string[] }>(`/reports/fairness/${rosterId}`);
       return res.data;
     },
     enabled: !!rosterId && reportType === 'fairness',
   });
 
-  const { data: coverageReport } = useQuery<CoverageMetric[]>({
+  const { data: coverageReport } = useQuery({
     queryKey: ['coverage-report', rosterId],
     queryFn: async () => {
-      const res = await api.get(`/reports/coverage/${rosterId}`);
+      const res = await api.get<CoverageMetric[]>(`/reports/coverage/${rosterId}`);
       return res.data;
     },
     enabled: !!rosterId && reportType === 'coverage',

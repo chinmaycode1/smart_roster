@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { api } from '../../lib/apiClient';
 import { Button } from '../../components/ui/Button';
 
 interface Process {
@@ -17,10 +17,10 @@ export function ProcessesPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '', description: '' });
 
-  const { data: processes = [], isLoading } = useQuery<Process[]>({
+  const { data: processes, isLoading } = useQuery({
     queryKey: ['processes'],
     queryFn: async () => {
-      const res = await api.get('/processes');
+      const res = await api.get<Process[]>('/processes');
       return res.data;
     },
   });
@@ -76,10 +76,6 @@ export function ProcessesPage() {
     setEditingId(null);
     setFormData({ name: '', code: '', description: '' });
   };
-
-  if (isLoading) {
-    return <div className="p-8">Loading...</div>;
-  }
 
   return (
     <div className="p-8">
@@ -140,7 +136,12 @@ export function ProcessesPage() {
       )}
 
       <div className="bg-white rounded-lg border border-gray-200">
-        <table className="w-full">
+        {isLoading ? (
+          <div className="p-8 text-center text-gray-500">Loading...</div>
+        ) : !processes || processes.length === 0 ? (
+          <div className="p-8 text-center text-gray-500">No processes found</div>
+        ) : (
+          <table className="w-full">
           <thead className="border-b border-gray-200">
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
@@ -179,6 +180,7 @@ export function ProcessesPage() {
             ))}
           </tbody>
         </table>
+        )}
       </div>
     </div>
   );

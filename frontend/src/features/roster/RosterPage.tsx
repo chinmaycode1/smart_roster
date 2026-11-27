@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { api } from '../../lib/apiClient';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
 
@@ -72,31 +72,31 @@ export function RosterPage() {
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
 
-  const { data: roster } = useQuery<Roster>({
+  const { data: roster } = useQuery({
     queryKey: ['roster', currentRosterId],
     queryFn: async () => {
       if (!currentRosterId) throw new Error('No roster selected');
-      const res = await api.get(`/rosters/${currentRosterId}`);
+      const res = await api.get<Roster>(`/rosters/${currentRosterId}`);
       return res.data;
     },
     enabled: !!currentRosterId,
   });
 
-  const { data: entries = [] } = useQuery<RosterEntry[]>({
+  const { data: entries } = useQuery({
     queryKey: ['roster-entries', currentRosterId],
     queryFn: async () => {
       if (!currentRosterId) return [];
-      const res = await api.get(`/rosters/${currentRosterId}/entries`);
+      const res = await api.get<RosterEntry[]>(`/rosters/${currentRosterId}/entries`);
       return res.data;
     },
     enabled: !!currentRosterId,
   });
 
-  const { data: conflicts = [] } = useQuery<Conflict[]>({
+  const { data: conflicts } = useQuery({
     queryKey: ['roster-conflicts', currentRosterId],
     queryFn: async () => {
       if (!currentRosterId) return [];
-      const res = await api.get(`/rosters/${currentRosterId}/conflicts`);
+      const res = await api.get<Conflict[]>(`/rosters/${currentRosterId}/conflicts`);
       return res.data;
     },
     enabled: !!currentRosterId,
@@ -104,10 +104,10 @@ export function RosterPage() {
 
   const generateMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post('/rosters/generate', { month, year });
+      const res = await api.post<{ roster: { id: string } }>('/rosters/generate', { month, year });
       return res.data;
     },
-    onSuccess: (data: { roster: { id: string } }) => {
+    onSuccess: (data) => {
       setCurrentRosterId(data.roster.id);
       queryClient.invalidateQueries({ queryKey: ['roster'] });
       queryClient.invalidateQueries({ queryKey: ['roster-entries'] });
@@ -128,10 +128,10 @@ export function RosterPage() {
 
   const repairMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.post(`/rosters/${currentRosterId}/repair`);
+      const res = await api.post<{ applied: boolean; changes?: Array<Record<string, unknown>>; reason?: string }>(`/rosters/${currentRosterId}/repair`);
       return res.data;
     },
-    onSuccess: (data: { applied: boolean; changes?: Array<Record<string, unknown>>; reason?: string }) => {
+    onSuccess: (data) => {
       if (data.applied) {
         alert(`Repair applied: ${data.changes?.length || 0} changes made`);
         queryClient.invalidateQueries({ queryKey: ['roster-entries', currentRosterId] });
@@ -164,10 +164,10 @@ export function RosterPage() {
 
   const exportCSVMutation = useMutation({
     mutationFn: async () => {
-      const res = await api.get(`/rosters/${currentRosterId}/export/csv`, { responseType: 'blob' });
+      const res = await api.get<Blob>(`/rosters/${currentRosterId}/export/csv`, { responseType: 'blob' });
       return res.data;
     },
-    onSuccess: (blob: Blob) => {
+    onSuccess: (blob) => {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -184,7 +184,7 @@ export function RosterPage() {
 
   const getEntriesGrouped = () => {
     const grouped = new Map<string, Map<number, RosterEntry>>();
-    entries.forEach((entry: RosterEntry) => {
+    (entries || []).forEach((entry: RosterEntry) => {
       const day = new Date(entry.date).getDate();
       if (!grouped.has(entry.employeeId)) {
         grouped.set(entry.employeeId, new Map());
@@ -204,7 +204,7 @@ export function RosterPage() {
   };
 
   const uniqueEmployees = new Map<string, RosterEntry['employee']>();
-  entries.forEach((e: RosterEntry) => {
+  (entries || []).forEach((e: RosterEntry) => {
     if (!uniqueEmployees.has(e.employee.id)) {
       uniqueEmployees.set(e.employee.id, e.employee);
     }
@@ -214,8 +214,8 @@ export function RosterPage() {
   );
   const days = getDaysInMonth();
   const entriesGrouped = getEntriesGrouped();
-  const errorConflicts = conflicts.filter((c: Conflict) => c.severity === 'ERROR');
-  const warningConflicts = conflicts.filter((c: Conflict) => c.severity === 'WARNING');
+  const errorConflicts = (conflicts || []).filter((c: Conflict) => c.severity === 'ERROR');
+  const warningConflicts = (conflicts || []).filter((c: Conflict) => c.severity === 'WARNING');
 
   return (
     <div className="p-8">
@@ -252,9 +252,9 @@ export function RosterPage() {
           {currentRosterId && (
             <>
               <Button variant="secondary" onClick={() => setShowConflicts(!showConflicts)}>
-                Conflicts ({errorConflicts.length}/{conflicts.length})
+                Conflicts ({errorConflicts.length}/{(conflicts || []).length})
               </Button>
-              {conflicts.length > 0 && (
+              {(conflicts || []).length > 0 && (
                 <Button variant="secondary" onClick={() => repairMutation.mutate()}>
                   Auto Repair
                 </Button>
@@ -306,7 +306,7 @@ export function RosterPage() {
             </div>
           </div>
           <div className="p-6 space-y-3">
-            {conflicts.map((conflict: Conflict) => (
+            {(conflicts || []).map((conflict: Conflict) => (
               <div
                 key={conflict.id}
                 className={`p-4 rounded-md border ${
@@ -341,14 +341,14 @@ export function RosterPage() {
                 )}
               </div>
             ))}
-            {conflicts.length === 0 && (
+            {(conflicts || []).length === 0 && (
               <p className="text-gray-500 text-center py-8">No conflicts found</p>
             )}
           </div>
         </div>
       )}
 
-      {currentRosterId && entries.length > 0 ? (
+      {currentRosterId && entries && entries.length > 0 ? (
         <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full border-collapse">
