@@ -1,4 +1,4 @@
-import type { PrismaClient, PublicHoliday } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 export async function seedHolidays(prisma: PrismaClient) {
   const holidayData = [

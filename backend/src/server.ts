@@ -20,16 +20,24 @@ async function start() {
   }
 }
 
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully');
+async function shutdown() {
+  logger.info('Shutting down gracefully');
   await prisma.$disconnect();
   process.exit(0);
+}
+
+process.on('SIGTERM', () => {
+  shutdown().catch((err) => {
+    logger.error(err, 'Error during shutdown');
+    process.exit(1);
+  });
 });
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT received, shutting down gracefully');
-  await prisma.$disconnect();
-  process.exit(0);
+process.on('SIGINT', () => {
+  shutdown().catch((err) => {
+    logger.error(err, 'Error during shutdown');
+    process.exit(1);
+  });
 });
 
-start();
+void start();

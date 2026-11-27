@@ -1,5 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { NotFoundError } from '../../lib/errors.js';
+import type { CreateEmployeeInput, UpdateEmployeeInput } from './schema.js';
 
 export async function fetchEmployees() {
   return prisma.employee.findMany({
@@ -49,35 +50,20 @@ export async function fetchEmployeeById(id: string) {
   return employee;
 }
 
-export async function createEmployee(data: {
-  code: string;
-  name: string;
-  email: string;
-  podId: string;
-  role?: string;
-  maxConsecutiveWorkDays?: number;
-}) {
+export async function createEmployee(data: CreateEmployeeInput) {
   return prisma.employee.create({
     data: {
       code: data.code,
       name: data.name,
       email: data.email,
       podId: data.podId,
-      role: (data.role as 'EMPLOYEE' | 'POD_LEAD') || 'EMPLOYEE',
+      role: data.role || 'EMPLOYEE',
       maxConsecutiveWorkDays: data.maxConsecutiveWorkDays || 6,
     },
   });
 }
 
-export async function updateEmployee(
-  id: string,
-  data: {
-    name?: string;
-    email?: string;
-    isActive?: boolean;
-    maxConsecutiveWorkDays?: number;
-  }
-) {
+export async function updateEmployee(id: string, data: UpdateEmployeeInput) {
   return prisma.employee.update({
     where: { id },
     data,

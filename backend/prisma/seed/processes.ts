@@ -1,4 +1,4 @@
-import type { PrismaClient, Process, Shift, OperatingRule } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 export async function seedProcesses(prisma: PrismaClient) {
   const processData = [

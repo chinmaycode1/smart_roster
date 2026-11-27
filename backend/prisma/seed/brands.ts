@@ -1,4 +1,4 @@
-import type { PrismaClient, Brand } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 export async function seedBrands(prisma: PrismaClient) {
   const brandData = [

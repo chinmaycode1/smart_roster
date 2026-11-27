@@ -24,11 +24,11 @@ export function analyzeLeaveApprovalImpact(
   context: GenerationContext
 ): ChangeImpactResult {
   const affectedDates: Date[] = [];
-  let currentDate = new Date(leave.startDate);
+  const startDate = new Date(leave.startDate);
+  const endDate = new Date(leave.endDate);
 
-  while (currentDate <= leave.endDate) {
+  for (let currentDate = new Date(startDate); currentDate <= endDate; currentDate.setDate(currentDate.getDate() + 1)) {
     affectedDates.push(new Date(currentDate));
-    currentDate.setDate(currentDate.getDate() + 1);
   }
 
   const updatedContext: GenerationContext = {

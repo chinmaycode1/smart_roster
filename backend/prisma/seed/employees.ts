@@ -1,4 +1,4 @@
-import type { PrismaClient, Pod, Employee } from '@prisma/client';
+import type { PrismaClient } from '@prisma/client';
 
 export async function seedEmployees(prisma: PrismaClient) {
   const podData = [

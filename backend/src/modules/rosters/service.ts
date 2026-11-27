@@ -3,6 +3,25 @@ import { generateRoster as generateRosterEngine } from '../../scheduling/index.j
 import { validateRoster } from '../../scheduling/validator/validateRoster.js';
 import { attemptLocalRepair } from '../../scheduling/repair/localRepair.js';
 import type { GenerationContext, RosterEntryData } from '../../scheduling/types.js';
+import type { Prisma } from '@prisma/client';
+
+type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
+  include: {
+    assignments: true;
+    weeklyOffPattern: true;
+    leaves: true;
+    compOffs: true;
+  };
+}>;
+
+type BrandProcessWithRelations = Prisma.BrandProcessGetPayload<{
+  include: {
+    brand: true;
+    process: true;
+    operatingRule: true;
+    coverageOverrides: true;
+  };
+}>;
 
 async function loadGenerationContext(month: number, year: number): Promise<GenerationContext> {
   const [employees, brandProcesses, holidays] = await Promise.all([
@@ -28,7 +47,7 @@ async function loadGenerationContext(month: number, year: number): Promise<Gener
   return {
     month,
     year,
-    employees: employees.map((emp) => ({
+    employees: employees.map((emp: EmployeeWithRelations) => ({
       id: emp.id,
       code: emp.code,
       name: emp.name,
@@ -50,7 +69,7 @@ async function loadGenerationContext(month: number, year: number): Promise<Gener
       leaves: emp.leaves.map((l) => ({
         startDate: l.startDate,
         endDate: l.endDate,
-        status: l.status as 'APPROVED',
+        status: 'APPROVED' as const,
       })),
       compOffs: emp.compOffs.map((c) => ({
         earnedOn: c.earnedOn,
@@ -58,7 +77,7 @@ async function loadGenerationContext(month: number, year: number): Promise<Gener
         status: c.status as 'EARNED' | 'REDEEMED' | 'EXPIRED',
       })),
     })),
-    brandProcesses: brandProcesses.map((bp) => ({
+    brandProcesses: brandProcesses.map((bp: BrandProcessWithRelations) => ({
       id: bp.id,
       brandId: bp.brandId,
       brandName: bp.brand.name,
@@ -67,7 +86,7 @@ async function loadGenerationContext(month: number, year: number): Promise<Gener
       processName: bp.process.name,
       processCode: bp.process.code,
       operatingRule: {
-        type: bp.operatingRule.type as any,
+        type: bp.operatingRule.type as 'ALL_365' | 'DAILY_EXCEPT_HOLIDAYS' | 'EXCEPT_SUNDAYS_AND_HOLIDAYS' | 'CUSTOM_WEEKDAYS',
         workingWeekdays: bp.operatingRule.workingWeekdays,
         worksOnHolidays: bp.operatingRule.worksOnHolidays,
       },
@@ -189,7 +208,7 @@ export async function updateEntry(entryId: string, data: { status: string; isLoc
   return prisma.rosterEntry.update({
     where: { id: entryId },
     data: {
-      status: data.status as any,
+      status: data.status as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF',
       isLocked: data.isLocked,
       note: data.note,
       source: 'MANUAL',
@@ -208,7 +227,7 @@ export async function analyzeChangeImpact(rosterId: string, change: { entryId: s
   const allEntries = await prisma.rosterEntry.findMany({ where: { rosterId } });
 
   const updatedEntries = allEntries.map((e) =>
-    e.id === change.entryId ? { ...e, status: change.newStatus as any } : e
+    e.id === change.entryId ? { ...e, status: change.newStatus as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF' } : e
   );
 
   const conflicts = validateRoster(
@@ -240,7 +259,7 @@ export async function repairRoster(rosterId: string) {
     entries.map((e) => ({
       employeeId: e.employeeId,
       date: e.date,
-      status: e.status,
+      status: e.status as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF',
       source: e.source as 'GENERATED' | 'MANUAL',
       isLocked: e.isLocked,
       note: e.note || undefined,
@@ -249,7 +268,7 @@ export async function repairRoster(rosterId: string) {
       entries.map((e) => ({
         employeeId: e.employeeId,
         date: e.date,
-        status: e.status,
+        status: e.status as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF',
         source: e.source as 'GENERATED' | 'MANUAL',
         isLocked: e.isLocked,
         note: e.note || undefined,
@@ -265,7 +284,7 @@ export async function repairRoster(rosterId: string) {
     for (const change of result.changes) {
       await tx.rosterEntry.updateMany({
         where: { rosterId, employeeId: change.employeeId, date: change.date },
-        data: { status: change.newStatus as any, source: 'MANUAL' },
+        data: { status: change.newStatus as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF', source: 'MANUAL' },
       });
     }
 

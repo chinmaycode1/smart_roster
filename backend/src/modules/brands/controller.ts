@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as service from './service.js';
+import type { CreateBrandInput } from './schema.js';
 
 export async function getBrands(_req: Request, res: Response, next: NextFunction) {
   try {
@@ -12,7 +13,7 @@ export async function getBrands(_req: Request, res: Response, next: NextFunction
 
 export async function createBrand(req: Request, res: Response, next: NextFunction) {
   try {
-    const brand = await service.createBrand(req.body);
+    const brand = await service.createBrand(req.body as CreateBrandInput);
     res.status(201).json({ data: brand });
   } catch (error) {
     next(error);

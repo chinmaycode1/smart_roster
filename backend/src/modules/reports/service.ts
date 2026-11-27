@@ -1,5 +1,19 @@
 import { prisma } from '../../lib/prisma.js';
 import { analyzeFairness } from '../../scheduling/fairness/fairnessAnalyzer.js';
+import type { Prisma } from '@prisma/client';
+
+type RosterEntryWithEmployee = Prisma.RosterEntryGetPayload<{
+  include: { employee: true };
+}>;
+
+type EmployeeWithRelations = Prisma.EmployeeGetPayload<{
+  include: {
+    weeklyOffPattern: true;
+    assignments: true;
+    leaves: true;
+    compOffs: true;
+  };
+}>;
 
 export async function generateFairnessReport(rosterId: string) {
   const entries = await prisma.rosterEntry.findMany({
@@ -18,16 +32,16 @@ export async function generateFairnessReport(rosterId: string) {
 
   const holidays = await prisma.publicHoliday.findMany();
 
-  const rosterEntries = entries.map((e) => ({
+  const rosterEntries = entries.map((e: RosterEntryWithEmployee) => ({
     employeeId: e.employeeId,
     date: e.date,
-    status: e.status as any,
-    source: e.source as any,
+    status: e.status as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF',
+    source: e.source as 'GENERATED' | 'MANUAL',
     isLocked: e.isLocked,
     note: e.note || undefined,
   }));
 
-  const employeeData = employees.map((emp) => ({
+  const employeeData = employees.map((emp: EmployeeWithRelations) => ({
     id: emp.id,
     code: emp.code,
     name: emp.name,
@@ -47,12 +61,12 @@ export async function generateFairnessReport(rosterId: string) {
     leaves: emp.leaves.map((l) => ({
       startDate: l.startDate,
       endDate: l.endDate,
-      status: l.status as any,
+      status: l.status as 'PENDING' | 'APPROVED' | 'REJECTED',
     })),
     compOffs: emp.compOffs.map((c) => ({
       earnedOn: c.earnedOn,
       redeemOn: c.redeemOn || undefined,
-      status: c.status as any,
+      status: c.status as 'EARNED' | 'REDEEMED' | 'EXPIRED',
     })),
   }));
 

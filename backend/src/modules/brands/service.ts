@@ -1,4 +1,5 @@
 import { prisma } from '../../lib/prisma.js';
+import type { CreateBrandInput } from './schema.js';
 
 export async function fetchBrands() {
   return prisma.brand.findMany({
@@ -15,6 +16,6 @@ export async function fetchBrands() {
   });
 }
 
-export async function createBrand(data: { name: string; code: string }) {
+export async function createBrand(data: CreateBrandInput) {
   return prisma.brand.create({ data });
 }
