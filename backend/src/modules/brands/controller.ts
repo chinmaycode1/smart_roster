@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as service from './service.js';
-import type { CreateBrandInput, UpdateBrandInput } from './schema.js';
+import { createBrandSchema, updateBrandSchema } from './schema.js';
 
 export async function getBrands(_req: Request, res: Response, next: NextFunction) {
   try {
@@ -13,7 +13,8 @@ export async function getBrands(_req: Request, res: Response, next: NextFunction
 
 export async function createBrand(req: Request, res: Response, next: NextFunction) {
   try {
-    const brand = await service.createBrand(req.body as CreateBrandInput);
+    const data = createBrandSchema.parse(req.body);
+    const brand = await service.createBrand(data);
     res.status(201).json({ data: brand });
   } catch (error) {
     next(error);
@@ -22,7 +23,8 @@ export async function createBrand(req: Request, res: Response, next: NextFunctio
 
 export async function updateBrand(req: Request, res: Response, next: NextFunction) {
   try {
-    const brand = await service.updateBrand(req.params.id, req.body as UpdateBrandInput);
+    const data = updateBrandSchema.parse(req.body);
+    const brand = await service.updateBrand(req.params.id, data);
     res.json({ data: brand });
   } catch (error) {
     next(error);

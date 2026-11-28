@@ -1,4 +1,4 @@
-﻿import { prisma } from '../../lib/prisma.js';
+import { prisma } from '../../lib/prisma.js';
 import { generateRoster as generateRosterEngine } from '../../scheduling/index.js';
 import { validateRoster } from '../../scheduling/validator/validateRoster.js';
 import { attemptLocalRepair } from '../../scheduling/repair/localRepair.js';
@@ -160,7 +160,7 @@ export async function generateRoster(data: { month: number; year: number; parent
         employeeId: c.employeeId,
         date: c.date,
         message: c.message,
-        suggestedActions: JSON.stringify(c.suggestedActions),
+        suggestedActions: c.suggestedActions as unknown as Prisma.InputJsonValue,
       }));
       for (let i = 0; i < conflictsData.length; i += 500) {
         await tx.conflict.createMany({ data: conflictsData.slice(i, i + 500) });
@@ -181,13 +181,13 @@ export async function generateRoster(data: { month: number; year: number; parent
   };
 
   try {
-    const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion));
+    const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion), { maxWait: 10000, timeout: 60000 });
     return { roster, conflicts: result.conflicts };
   } catch (error: unknown) {
     const err = error as { code?: string };
     if (err.code === 'P2002') {
       nextVersion = await computeNextVersion();
-      const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion));
+      const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion), { maxWait: 10000, timeout: 60000 });
       return { roster, conflicts: result.conflicts };
     }
     throw error;
@@ -288,7 +288,7 @@ export async function updateEntry(entryId: string, data: { status: string; isLoc
         employeeId: c.employeeId,
         date: c.date,
         message: c.message,
-        suggestedActions: JSON.stringify(c.suggestedActions),
+        suggestedActions: c.suggestedActions as unknown as Prisma.InputJsonValue,
       }));
       for (let i = 0; i < conflictsData.length; i += 500) {
         await tx.conflict.createMany({ data: conflictsData.slice(i, i + 500) });
@@ -454,7 +454,7 @@ export async function revalidateRoster(rosterId: string) {
         employeeId: c.employeeId || null,
         date: c.date || null,
         message: c.message,
-        suggestedActions: JSON.stringify(c.suggestedActions),
+        suggestedActions: c.suggestedActions as unknown as Prisma.InputJsonValue,
       }));
       for (let i = 0; i < conflictsData.length; i += 500) {
         await tx.conflict.createMany({ data: conflictsData.slice(i, i + 500) });
@@ -519,16 +519,21 @@ export async function repairRoster(rosterId: string) {
         after: { changesApplied: result.changes.length, changes: result.changes },
       },
     });
-  });
+  }, { maxWait: 10000, timeout: 60000 });
 
   return { applied: true, changes: result.changes };
 }
 
 export async function getRosterConflicts(rosterId: string) {
-  return prisma.conflict.findMany({
+  const conflicts = await prisma.conflict.findMany({
     where: { rosterId },
     orderBy: { severity: 'desc' },
   });
+  
+  return conflicts.map((c) => ({
+    ...c,
+    suggestedActions: typeof c.suggestedActions === 'string' ? JSON.parse(c.suggestedActions) as unknown : c.suggestedActions,
+  }));
 }
 
 export async function publishRoster(rosterId: string) {

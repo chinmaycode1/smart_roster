@@ -9,6 +9,7 @@ export function ProcessesPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '' });
+  const [errorMessage, setErrorMessage] = useState('');
 
   const { data: processes, isLoading } = useQuery({
     queryKey: ['processes'],
@@ -26,6 +27,10 @@ export function ProcessesPage() {
       queryClient.invalidateQueries({ queryKey: ['processes'] });
       setIsCreating(false);
       setFormData({ name: '', code: '' });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to create process');
     },
   });
 
@@ -37,6 +42,10 @@ export function ProcessesPage() {
       queryClient.invalidateQueries({ queryKey: ['processes'] });
       setEditingId(null);
       setFormData({ name: '', code: '' });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to update process');
     },
   });
 
@@ -46,6 +55,10 @@ export function ProcessesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['processes'] });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to delete process');
     },
   });
 
@@ -78,6 +91,12 @@ export function ProcessesPage() {
           <Button onClick={() => setIsCreating(true)}>Create Process</Button>
         )}
       </div>
+
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
+          {errorMessage}
+        </div>
+      )}
 
       {isCreating && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">

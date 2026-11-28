@@ -3,12 +3,12 @@ import * as reportsService from './service.js';
 
 export async function getFairnessReport(req: Request, res: Response) {
   const report = await reportsService.generateFairnessReport(req.params.rosterId);
-  res.json(report);
+  res.json({ data: report });
 }
 
 export async function getCoverageReport(req: Request, res: Response) {
   const report = await reportsService.generateCoverageReport(req.params.rosterId);
-  res.json(report);
+  res.json({ data: report });
 }
 
 export async function exportRosterCSV(req: Request, res: Response) {

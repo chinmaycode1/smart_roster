@@ -9,6 +9,7 @@ export function PodsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '' });
+  const [errorMessage, setErrorMessage] = useState('');
 
   const { data: pods, isLoading } = useQuery({
     queryKey: ['pods'],
@@ -26,6 +27,10 @@ export function PodsPage() {
       queryClient.invalidateQueries({ queryKey: ['pods'] });
       setIsCreating(false);
       setFormData({ name: '', code: '' });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to create pod');
     },
   });
 
@@ -37,6 +42,10 @@ export function PodsPage() {
       queryClient.invalidateQueries({ queryKey: ['pods'] });
       setEditingId(null);
       setFormData({ name: '', code: '' });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to update pod');
     },
   });
 
@@ -46,6 +55,10 @@ export function PodsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pods'] });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to delete pod');
     },
   });
 
@@ -78,6 +91,12 @@ export function PodsPage() {
           <Button onClick={() => setIsCreating(true)}>Create Pod</Button>
         )}
       </div>
+
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
+          {errorMessage}
+        </div>
+      )}
 
       {isCreating && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">

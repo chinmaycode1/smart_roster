@@ -9,6 +9,7 @@ export function BrandsPage() {
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', code: '' });
+  const [errorMessage, setErrorMessage] = useState('');
 
   const { data: brands, isLoading } = useQuery({
     queryKey: ['brands'],
@@ -26,6 +27,10 @@ export function BrandsPage() {
       queryClient.invalidateQueries({ queryKey: ['brands'] });
       setIsCreating(false);
       setFormData({ name: '', code: '' });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to create brand');
     },
   });
 
@@ -37,6 +42,10 @@ export function BrandsPage() {
       queryClient.invalidateQueries({ queryKey: ['brands'] });
       setEditingId(null);
       setFormData({ name: '', code: '' });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to update brand');
     },
   });
 
@@ -46,6 +55,10 @@ export function BrandsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['brands'] });
+      setErrorMessage('');
+    },
+    onError: (error: Error) => {
+      setErrorMessage(error.message || 'Failed to delete brand');
     },
   });
 
@@ -78,6 +91,12 @@ export function BrandsPage() {
           <Button onClick={() => setIsCreating(true)}>Create Brand</Button>
         )}
       </div>
+
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
+          {errorMessage}
+        </div>
+      )}
 
       {isCreating && (
         <div className="bg-white rounded-lg border border-gray-200 p-6 mb-6">

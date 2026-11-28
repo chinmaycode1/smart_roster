@@ -90,8 +90,8 @@ export function RosterPage() {
   const [viewMode, setViewMode] = useState<ViewMode>('company');
   const [showConflicts, setShowConflicts] = useState(false);
   const [editingCell, setEditingCell] = useState<{ entryId: string; x: number; y: number } | null>(null);
-  const [month, setMonth] = useState(new Date().getMonth() + 1);
-  const [year, setYear] = useState(new Date().getFullYear());
+  const [month, setMonth] = useState(12);
+  const [year, setYear] = useState(2026);
   const [selectedPod, setSelectedPod] = useState<string>('');
   const [selectedBrand, setSelectedBrand] = useState<string>('');
   const [selectedProcess, setSelectedProcess] = useState<string>('');
@@ -102,8 +102,8 @@ export function RosterPage() {
   useQuery({
     queryKey: ['roster-list', month, year],
     queryFn: async () => {
-      const res = await api.get<{ rosters: Roster[] }>(`/rosters?month=${month}&year=${year}`);
-      const list = res.data.rosters;
+      const res = await api.get<Roster[]>(`/rosters?month=${month}&year=${year}`);
+      const list = Array.isArray(res.data) ? res.data : [];
       setVersions(list);
       if (list.length > 0) {
         setCurrentRosterId(list[0].id);
@@ -755,7 +755,7 @@ export function RosterPage() {
                   <div className="mt-2 text-xs text-gray-600">
                     <strong>Suggestions:</strong>
                     <ul className="list-disc list-inside ml-2 mt-1">
-                      {conflict.suggestedActions.map((action, idx) => (
+                      {(Array.isArray(conflict.suggestedActions) ? conflict.suggestedActions : []).map((action, idx) => (
                         <li key={idx}>{action.description}</li>
                       ))}
                     </ul>
