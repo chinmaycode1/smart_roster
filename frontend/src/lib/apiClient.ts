@@ -32,8 +32,17 @@ export async function apiRequest<T>(
     throw new Error(message);
   }
 
-  const data = await response.json();
-  return data.data;
+  if (response.status === 204 || response.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
+
+  const body = await response.json();
+  
+  if (typeof body === 'object' && body !== null && !Array.isArray(body) && 'data' in body) {
+    return body.data as T;
+  }
+  
+  return body as T;
 }
 
 export const api = {
@@ -43,7 +52,16 @@ export const api = {
       const response = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },
       });
-      if (!response.ok) throw new Error('Request failed');
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({
+          error: { message: 'Request failed' },
+        }));
+        const message = error.error?.message || error.message || 'Request failed';
+        throw new Error(message);
+      }
+      if (response.status === 204 || response.headers.get('content-length') === '0') {
+        return { data: undefined as T };
+      }
       const blob = await response.blob();
       return { data: blob as T };
     }
