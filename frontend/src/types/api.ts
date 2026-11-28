@@ -118,3 +118,37 @@ export interface AssignmentWithEmployee extends Assignment {
     };
   };
 }
+
+export interface DashboardSummary {
+  totalEmployees: number;
+  totalBrands: number;
+  totalProcesses: number;
+  openConflicts: number;
+  errorCount: number;
+  warningCount: number;
+  coverage: {
+    covered: number;
+    uncovered: number;
+    offLeave: number;
+    percentage: number;
+  };
+  todayOverview: {
+    date: string;
+    working: number;
+    onLeave: number;
+    weeklyOff: number;
+    holiday: number;
+    compOff: number;
+    coverageGaps: number;
+  } | null;
+  brandCoverage: Array<{
+    brandName: string;
+    percentage: number;
+  }>;
+  preview: Array<{
+    employeeId: string;
+    employeeName: string;
+    podName: string;
+    statuses: Record<number, string>;
+  }>;
+}

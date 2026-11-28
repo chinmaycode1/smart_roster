@@ -5,8 +5,9 @@ export async function getDashboardSummary(req: Request, res: Response, next: Nex
   try {
     const month = parseInt(req.query.month as string) || new Date().getMonth() + 1;
     const year = parseInt(req.query.year as string) || new Date().getFullYear();
+    const date = req.query.date as string | undefined;
 
-    const summary = await service.getDashboardSummary(month, year);
+    const summary = await service.getDashboardSummary(month, year, date);
     res.json({ data: summary });
   } catch (error) {
     next(error);

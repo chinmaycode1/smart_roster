@@ -15,7 +15,7 @@ import { compOffRoutes } from './modules/compoffs/routes.js';
 import assignmentsRoutes from './modules/assignments/routes.js';
 import brandProcessesRoutes from './modules/brand-processes/routes.js';
 import coverageOverridesRoutes from './modules/coverage-overrides/routes.js';
-import operatingRulesRoutes from './modules/operating-rules/routes.js';
+import { operatingRulesRoutes } from './modules/operating-rules/routes.js';
 
 export function createApp() {
   const app = express();
@@ -47,3 +47,4 @@ export function createApp() {
 
   return app;
 }
+
