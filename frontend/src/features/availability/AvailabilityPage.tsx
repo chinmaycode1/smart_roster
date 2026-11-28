@@ -56,6 +56,7 @@ interface RosterImpact {
   before: { errors: number; warnings: number };
   after: { errors: number; warnings: number };
   newConflicts: Conflict[];
+  resolvedConflicts: number;
 }
 
 interface RosterInfo {
@@ -349,7 +350,7 @@ export function AvailabilityPage() {
                         {roster.impact.newConflicts.length} new conflict{roster.impact.newConflicts.length > 1 ? 's' : ''}:
                       </p>
                       <div className="space-y-3">
-                        {roster.impact.newConflicts.map((conflict, idx) => (
+                        {roster.impact.newConflicts.slice(0, 10).map((conflict, idx) => (
                           <div
                             key={idx}
                             className={`p-3 rounded border ${
@@ -382,11 +383,21 @@ export function AvailabilityPage() {
                             )}
                           </div>
                         ))}
+                        {roster.impact.newConflicts.length > 10 && (
+                          <p className="text-sm text-gray-600 italic">
+                            +{roster.impact.newConflicts.length - 10} more
+                          </p>
+                        )}
                       </div>
                     </div>
                   ) : (
                     <p className="text-sm text-green-700 font-medium">
                       ✓ No new conflicts detected
+                    </p>
+                  )}
+                  {roster.impact.resolvedConflicts > 0 && (
+                    <p className="text-sm text-green-700 font-medium mt-2">
+                      ✓ {roster.impact.resolvedConflicts} conflict{roster.impact.resolvedConflicts > 1 ? 's' : ''} resolved
                     </p>
                   )}
                 </>

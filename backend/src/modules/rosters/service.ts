@@ -1,4 +1,4 @@
-import { prisma } from '../../lib/prisma.js';
+﻿import { prisma } from '../../lib/prisma.js';
 import { generateRoster as generateRosterEngine } from '../../scheduling/index.js';
 import { validateRoster } from '../../scheduling/validator/validateRoster.js';
 import { attemptLocalRepair } from '../../scheduling/repair/localRepair.js';
@@ -318,10 +318,26 @@ export async function analyzeChangeImpact(rosterId: string, change: { entryId: s
     context
   );
 
-  const oldConflictCount = await prisma.conflict.count({ where: { rosterId } });
-  const conflictDelta = conflicts.length - oldConflictCount;
+  // Get current conflicts and build stable key sets
+  const conflictsBefore = await prisma.conflict.findMany({
+    where: { rosterId },
+    select: { code: true, brandProcessId: true, employeeId: true, date: true },
+  });
 
-  return { affectedDates: [entry.date], newConflicts: conflicts, conflictDelta };
+  const beforeSet = new Set(
+    conflictsBefore.map((c) => 
+      `${c.code}|${c.brandProcessId ?? ''}|${c.employeeId ?? ''}|${c.date ? new Date(c.date).toISOString().slice(0,10) : ''}`
+    )
+  );
+
+  const newConflicts = conflicts.filter((c) => {
+    const key = `${c.code}|${c.brandProcessId ?? ''}|${c.employeeId ?? ''}|${c.date ? new Date(c.date).toISOString().slice(0,10) : ''}`;
+    return !beforeSet.has(key);
+  });
+
+  const conflictDelta = conflicts.length - conflictsBefore.length;
+
+  return { affectedDates: [entry.date], newConflicts, conflictDelta };
 }
 
 export async function revalidateRoster(rosterId: string) {
@@ -331,6 +347,7 @@ export async function revalidateRoster(rosterId: string) {
       before: { errors: 0, warnings: 0 },
       after: { errors: 0, warnings: 0 },
       newConflicts: [],
+      resolvedConflicts: 0,
     };
   }
 
@@ -342,6 +359,13 @@ export async function revalidateRoster(rosterId: string) {
 
   const errorsBefore = conflictsBefore.filter((c) => c.severity === 'ERROR').length;
   const warningsBefore = conflictsBefore.filter((c) => c.severity === 'WARNING').length;
+
+  // Build stable key set BEFORE deletion
+  const beforeSet = new Set(
+    conflictsBefore.map((c) => 
+      `${c.code}|${c.brandProcessId ?? ''}|${c.employeeId ?? ''}|${c.date ? new Date(c.date).toISOString().slice(0,10) : ''}`
+    )
+  );
 
   // Reload context (which now includes the new/updated leave)
   const context = await loadGenerationContext(roster.month, roster.year);
@@ -363,17 +387,21 @@ export async function revalidateRoster(rosterId: string) {
   const errorsAfter = newConflicts.filter((c) => c.severity === 'ERROR').length;
   const warningsAfter = newConflicts.filter((c) => c.severity === 'WARNING').length;
 
-  // Find truly new conflicts (not present before)
-  const beforeSet = new Set(
-    conflictsBefore.map((c) => 
-      `${c.code}_${c.employeeId || ''}_${c.brandProcessId || ''}_${c.date?.toISOString().split('T')[0] || ''}`
+  // Build stable key set for after
+  const afterSet = new Set(
+    newConflicts.map((c) => 
+      `${c.code}|${c.brandProcessId ?? ''}|${c.employeeId ?? ''}|${c.date ? new Date(c.date).toISOString().slice(0,10) : ''}`
     )
   );
 
+  // Find truly new conflicts (not present before)
   const conflictsToReturn = newConflicts.filter((c) => {
-    const key = `${c.code}_${c.employeeId || ''}_${c.brandProcessId || ''}_${c.date?.toISOString().split('T')[0] || ''}`;
+    const key = `${c.code}|${c.brandProcessId ?? ''}|${c.employeeId ?? ''}|${c.date ? new Date(c.date).toISOString().slice(0,10) : ''}`;
     return !beforeSet.has(key);
   });
+
+  // Find resolved conflicts (in before but not in after)
+  const resolvedCount = Array.from(beforeSet).filter(key => !afterSet.has(key)).length;
 
   // If roster is published, return impact only without mutating
   if (roster.status === 'PUBLISHED') {
@@ -381,6 +409,7 @@ export async function revalidateRoster(rosterId: string) {
       before: { errors: errorsBefore, warnings: warningsBefore },
       after: { errors: errorsAfter, warnings: warningsAfter },
       newConflicts: conflictsToReturn,
+      resolvedConflicts: resolvedCount,
     };
   }
 
@@ -411,6 +440,7 @@ export async function revalidateRoster(rosterId: string) {
     before: { errors: errorsBefore, warnings: warningsBefore },
     after: { errors: errorsAfter, warnings: warningsAfter },
     newConflicts: conflictsToReturn,
+    resolvedConflicts: resolvedCount,
   };
 }
 
