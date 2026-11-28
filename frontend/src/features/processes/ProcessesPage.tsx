@@ -8,35 +8,35 @@ export function ProcessesPage() {
   const queryClient = useQueryClient();
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ name: '', code: '', description: '' });
+  const [formData, setFormData] = useState({ name: '', code: '' });
 
   const { data: processes, isLoading } = useQuery({
     queryKey: ['processes'],
     queryFn: async () => {
-      const res = await api.get<Process[]>('/processes');
-      return res.data;
+      const res = await api.get<{ processes: Process[] }>('/processes');
+      return res.data.processes;
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; code: string; description?: string }) => {
+    mutationFn: async (data: { name: string; code: string }) => {
       await api.post('/processes', data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['processes'] });
       setIsCreating(false);
-      setFormData({ name: '', code: '', description: '' });
+      setFormData({ name: '', code: '' });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name: string; code: string; description?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name: string; code: string } }) => {
       await api.put(`/processes/${id}`, data);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['processes'] });
       setEditingId(null);
-      setFormData({ name: '', code: '', description: '' });
+      setFormData({ name: '', code: '' });
     },
   });
 
@@ -60,14 +60,14 @@ export function ProcessesPage() {
 
   const handleEdit = (process: Process) => {
     setEditingId(process.id);
-    setFormData({ name: process.name, code: process.code, description: process.description || '' });
+    setFormData({ name: process.name, code: process.code });
     setIsCreating(true);
   };
 
   const handleCancel = () => {
     setIsCreating(false);
     setEditingId(null);
-    setFormData({ name: '', code: '', description: '' });
+    setFormData({ name: '', code: '' });
   };
 
   return (
@@ -107,17 +107,6 @@ export function ProcessesPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Description
-              </label>
-              <textarea
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={3}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
             <div className="flex gap-2">
               <Button type="submit">{editingId ? 'Update' : 'Create'}</Button>
               <Button type="button" variant="ghost" onClick={handleCancel}>
@@ -139,7 +128,6 @@ export function ProcessesPage() {
             <tr>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Brands</th>
               <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
@@ -149,7 +137,6 @@ export function ProcessesPage() {
               <tr key={process.id}>
                 <td className="px-6 py-4 text-sm text-gray-900">{process.code}</td>
                 <td className="px-6 py-4 text-sm text-gray-900">{process.name}</td>
-                <td className="px-6 py-4 text-sm text-gray-500">{process.description || '-'}</td>
                 <td className="px-6 py-4 text-sm text-gray-500">{process._count?.brandProcesses || 0}</td>
                 <td className="px-6 py-4 text-right text-sm space-x-2">
                   <button

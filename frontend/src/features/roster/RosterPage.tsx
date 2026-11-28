@@ -86,6 +86,7 @@ const statusOptions = [
 export function RosterPage() {
   const queryClient = useQueryClient();
   const [currentRosterId, setCurrentRosterId] = useState<string | null>(null);
+  const [versions, setVersions] = useState<Roster[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('company');
   const [showConflicts, setShowConflicts] = useState(false);
   const [editingCell, setEditingCell] = useState<{ entryId: string; x: number; y: number } | null>(null);
@@ -96,6 +97,22 @@ export function RosterPage() {
   const [selectedProcess, setSelectedProcess] = useState<string>('');
   const [selectedEmployee, setSelectedEmployee] = useState<string>('');
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string>('');
+
+  useQuery({
+    queryKey: ['roster-list', month, year],
+    queryFn: async () => {
+      const res = await api.get<{ rosters: Roster[] }>(`/rosters?month=${month}&year=${year}`);
+      const list = res.data.rosters;
+      setVersions(list);
+      if (list.length > 0) {
+        setCurrentRosterId(list[0].id);
+      } else {
+        setCurrentRosterId(null);
+      }
+      return list;
+    },
+  });
 
   const { data: roster } = useQuery({
     queryKey: ['roster', currentRosterId],
@@ -148,10 +165,15 @@ export function RosterPage() {
     },
     onSuccess: (data) => {
       setCurrentRosterId(data.roster.id);
+      setErrorMessage('');
+      queryClient.invalidateQueries({ queryKey: ['roster-list', month, year] });
       queryClient.invalidateQueries({ queryKey: ['roster'] });
       queryClient.invalidateQueries({ queryKey: ['roster-entries'] });
       queryClient.invalidateQueries({ queryKey: ['roster-conflicts'] });
       queryClient.invalidateQueries({ queryKey: ['roster-view-data'] });
+    },
+    onError: (error: any) => {
+      setErrorMessage(error.response?.data?.error || error.message || 'Failed to generate roster');
     },
   });
 
@@ -598,10 +620,10 @@ export function RosterPage() {
             </p>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 items-center">
           <select
             value={month}
-            onChange={(e) => setMonth(Number(e.target.value))}
+            onChange={(e) => { setMonth(Number(e.target.value)); setCurrentRosterId(null); }}
             className="px-3 py-2 border border-gray-300 rounded-md"
           >
             {Array.from({ length: 12 }, (_, i) => (
@@ -613,9 +635,20 @@ export function RosterPage() {
           <input
             type="number"
             value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
+            onChange={(e) => { setYear(Number(e.target.value)); setCurrentRosterId(null); }}
             className="w-24 px-3 py-2 border border-gray-300 rounded-md"
           />
+          {versions.length > 1 && currentRosterId && (
+            <select
+              value={currentRosterId}
+              onChange={(e) => setCurrentRosterId(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm"
+            >
+              {versions.map((v) => (
+                <option key={v.id} value={v.id}>v{v.version}</option>
+              ))}
+            </select>
+          )}
           <Button onClick={() => generateMutation.mutate()} disabled={generateMutation.isPending}>
             {generateMutation.isPending ? 'Generating...' : 'Generate'}
           </Button>
@@ -646,6 +679,12 @@ export function RosterPage() {
           )}
         </div>
       </div>
+
+      {errorMessage && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-800">
+          {errorMessage}
+        </div>
+      )}
 
       {editConflictMessage && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800">

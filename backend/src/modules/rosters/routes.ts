@@ -4,6 +4,7 @@ import * as rosterController from './controller.js';
 
 export const rosterRoutes = Router();
 
+rosterRoutes.get('/', asyncHandler(rosterController.listRosters));
 rosterRoutes.post('/generate', asyncHandler(rosterController.generateRoster));
 rosterRoutes.get('/:id', asyncHandler(rosterController.getRoster));
 rosterRoutes.get('/:id/entries', asyncHandler(rosterController.getRosterEntries));

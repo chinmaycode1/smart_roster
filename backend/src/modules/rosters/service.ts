@@ -126,16 +126,23 @@ export async function generateRoster(data: { month: number; year: number; parent
   const context = await loadGenerationContext(month, year);
   const result = generateRosterEngine(context);
 
-  const nextVersion = parentVersionId
-    ? (await prisma.roster.findUnique({ where: { id: parentVersionId }, select: { version: true } }))?.version ?? 0 + 1
-    : 1;
+  const computeNextVersion = async () => {
+    const highest = await prisma.roster.findFirst({
+      where: { month, year },
+      orderBy: { version: 'desc' },
+      select: { version: true },
+    });
+    return (highest?.version ?? 0) + 1;
+  };
 
-  const roster = await prisma.$transaction(async (tx) => {
+  let nextVersion = await computeNextVersion();
+
+  const createRoster = async (tx: Prisma.TransactionClient, version: number) => {
     const newRoster = await tx.roster.create({
       data: {
         month,
         year,
-        version: nextVersion,
+        version,
         status: 'DRAFT',
         generatedAt: new Date(),
         parentVersionId: parentVersionId || null,
@@ -166,14 +173,32 @@ export async function generateRoster(data: { month: number; year: number; parent
         entityId: newRoster.id,
         action: parentVersionId ? 'REGENERATE' : 'GENERATE',
         actorRole: 'SYSTEM',
-        after: { month, year, version: nextVersion, entriesCount: result.entries.length },
+        after: { month, year, version, entriesCount: result.entries.length },
       },
     });
 
     return newRoster;
-  });
+  };
 
-  return { roster, conflicts: result.conflicts };
+  try {
+    const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion));
+    return { roster, conflicts: result.conflicts };
+  } catch (error: any) {
+    if (error.code === 'P2002') {
+      nextVersion = await computeNextVersion();
+      const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion));
+      return { roster, conflicts: result.conflicts };
+    }
+    throw error;
+  }
+}
+
+export async function listRosters(month: number, year: number) {
+  return prisma.roster.findMany({
+    where: { month, year },
+    orderBy: { version: 'desc' },
+    select: { id: true, month: true, year: true, version: true, status: true, generatedAt: true },
+  });
 }
 
 export async function getRosterById(id: string) {

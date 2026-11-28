@@ -1,6 +1,12 @@
 import type { Request, Response } from 'express';
 import * as rosterService from './service.js';
-import { generateRosterSchema, updateEntrySchema, changeImpactSchema, approvalActionSchema } from './schema.js';
+import { generateRosterSchema, updateEntrySchema, changeImpactSchema, approvalActionSchema, listRostersSchema } from './schema.js';
+
+export async function listRosters(req: Request, res: Response) {
+  const query = listRostersSchema.parse(req.query);
+  const rosters = await rosterService.listRosters(query.month, query.year);
+  res.json({ rosters });
+}
 
 export async function generateRoster(req: Request, res: Response) {
   const data = generateRosterSchema.parse(req.body);

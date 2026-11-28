@@ -4,7 +4,7 @@ import * as processService from './service.js';
 
 export async function listProcesses(_req: Request, res: Response) {
   const processes = await processService.getAllProcesses();
-  res.json(processes);
+  res.json({ processes });
 }
 
 export async function getProcess(req: Request, res: Response) {
