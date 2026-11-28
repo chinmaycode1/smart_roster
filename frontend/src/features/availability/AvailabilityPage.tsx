@@ -30,7 +30,7 @@ interface Holiday {
   id: string;
   date: string;
   name: string;
-  isOptional: boolean;
+  region: string;
 }
 
 interface SuggestedAction {
@@ -201,7 +201,7 @@ export function AvailabilityPage() {
   });
 
   const createHoliday = useMutation({
-    mutationFn: async (data: { date: string; name: string; isOptional: boolean }) => {
+    mutationFn: async (data: { date: string; name: string }) => {
       await api.post('/holidays', data);
     },
     onSuccess: () => {
@@ -250,7 +250,6 @@ export function AvailabilityPage() {
     createHoliday.mutate({
       date: formData.get('date') as string,
       name: formData.get('name') as string,
-      isOptional: formData.get('isOptional') === 'on',
     });
   };
 
@@ -616,10 +615,6 @@ export function AvailabilityPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input type="text" name="name" required className="w-full px-3 py-2 border border-gray-300 rounded-md" />
               </div>
-              <div className="flex items-center gap-2">
-                <input type="checkbox" name="isOptional" id="isOptional" className="rounded" />
-                <label htmlFor="isOptional" className="text-sm text-gray-700">Optional Holiday</label>
-              </div>
               <Button type="submit">Create Holiday</Button>
             </form>
           )}
@@ -630,7 +625,7 @@ export function AvailabilityPage() {
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Region</th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
@@ -639,7 +634,7 @@ export function AvailabilityPage() {
                   <tr key={holiday.id}>
                     <td className="px-6 py-4 text-sm text-gray-900">{new Date(holiday.date).toLocaleDateString()}</td>
                     <td className="px-6 py-4 text-sm text-gray-900">{holiday.name}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900">{holiday.isOptional ? 'Optional' : 'Mandatory'}</td>
+                    <td className="px-6 py-4 text-sm text-gray-900">{holiday.region}</td>
                     <td className="px-6 py-4 text-right">
                       <button
                         onClick={() => deleteHoliday.mutate(holiday.id)}
