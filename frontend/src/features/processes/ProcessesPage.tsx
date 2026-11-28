@@ -13,8 +13,8 @@ export function ProcessesPage() {
   const { data: processes, isLoading } = useQuery({
     queryKey: ['processes'],
     queryFn: async () => {
-      const res = await api.get<{ processes: Process[] }>('/processes');
-      return res.data.processes;
+      const res = await api.get<Process[] | { processes: Process[] }>('/processes');
+      return Array.isArray(res.data) ? res.data : res.data?.processes ?? [];
     },
   });
 
