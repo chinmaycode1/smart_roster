@@ -272,11 +272,11 @@ export async function updateEntry(entryId: string, data: { status: string; isLoc
     await tx.auditLog.create({
       data: {
         entityType: 'RosterEntry',
-        entityId: entryId,
+        entityId: entry.rosterId, // Use rosterId instead of entryId for FK constraint
         action: 'UPDATE',
         actorRole: 'EMPLOYEE',
-        before: { status: entry.status },
-        after: { status: data.status },
+        before: { status: entry.status, entryId },
+        after: { status: data.status, entryId },
       },
     });
   });
