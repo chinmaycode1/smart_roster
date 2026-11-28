@@ -9,6 +9,13 @@ import { podRoutes } from './modules/pods/routes.js';
 import { processRoutes } from './modules/processes/routes.js';
 import { rosterRoutes } from './modules/rosters/routes.js';
 import { reportsRoutes } from './modules/reports/routes.js';
+import { leaveRoutes } from './modules/leaves/routes.js';
+import { holidayRoutes } from './modules/holidays/routes.js';
+import { compOffRoutes } from './modules/compoffs/routes.js';
+import assignmentsRoutes from './modules/assignments/routes.js';
+import brandProcessesRoutes from './modules/brand-processes/routes.js';
+import coverageOverridesRoutes from './modules/coverage-overrides/routes.js';
+import operatingRulesRoutes from './modules/operating-rules/routes.js';
 
 export function createApp() {
   const app = express();
@@ -28,6 +35,13 @@ export function createApp() {
   app.use('/api/processes', processRoutes);
   app.use('/api/rosters', rosterRoutes);
   app.use('/api/reports', reportsRoutes);
+  app.use('/api/leaves', leaveRoutes);
+  app.use('/api/holidays', holidayRoutes);
+  app.use('/api/comp-offs', compOffRoutes);
+  app.use('/api/assignments', assignmentsRoutes);
+  app.use('/api/brand-processes', brandProcessesRoutes);
+  app.use('/api/coverage-overrides', coverageOverridesRoutes);
+  app.use('/api/operating-rules', operatingRulesRoutes);
 
   app.use(errorHandler);
 

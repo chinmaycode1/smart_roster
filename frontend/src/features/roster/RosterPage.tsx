@@ -26,6 +26,7 @@ interface Conflict {
   message: string;
   date?: string;
   employeeId?: string;
+  brandProcessId?: string;
   suggestedActions: Array<{ type: string; description: string }>;
 }
 
@@ -35,6 +36,25 @@ interface Roster {
   year: number;
   version: number;
   status: 'DRAFT' | 'PENDING_APPROVAL' | 'PUBLISHED';
+}
+
+interface ViewEmployee {
+  id: string;
+  code: string;
+  name: string;
+  podId: string;
+  podName: string;
+  isPodLead: boolean;
+}
+
+interface ViewBrandProcess {
+  id: string;
+  brandId: string;
+  brandName: string;
+  processId: string;
+  processName: string;
+  defaultMinCoverage: number;
+  assignedEmployeeIds: string[];
 }
 
 type ViewMode = 'employee' | 'pod' | 'brand' | 'process' | 'company';
@@ -66,11 +86,16 @@ const statusOptions = [
 export function RosterPage() {
   const queryClient = useQueryClient();
   const [currentRosterId, setCurrentRosterId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('employee');
+  const [viewMode, setViewMode] = useState<ViewMode>('company');
   const [showConflicts, setShowConflicts] = useState(false);
   const [editingCell, setEditingCell] = useState<{ entryId: string; x: number; y: number } | null>(null);
   const [month, setMonth] = useState(new Date().getMonth() + 1);
   const [year, setYear] = useState(new Date().getFullYear());
+  const [selectedPod, setSelectedPod] = useState<string>('');
+  const [selectedBrand, setSelectedBrand] = useState<string>('');
+  const [selectedProcess, setSelectedProcess] = useState<string>('');
+  const [selectedEmployee, setSelectedEmployee] = useState<string>('');
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const { data: roster } = useQuery({
     queryKey: ['roster', currentRosterId],
@@ -87,6 +112,20 @@ export function RosterPage() {
     queryFn: async () => {
       if (!currentRosterId) return [];
       const res = await api.get<RosterEntry[]>(`/rosters/${currentRosterId}/entries`);
+      return res.data;
+    },
+    enabled: !!currentRosterId,
+  });
+
+  const { data: viewData } = useQuery({
+    queryKey: ['roster-view-data', currentRosterId],
+    queryFn: async () => {
+      if (!currentRosterId) return null;
+      const res = await api.get<{
+        employees: ViewEmployee[];
+        brandProcesses: ViewBrandProcess[];
+        holidays: Array<{ date: string }>;
+      }>(`/rosters/${currentRosterId}/view-data`);
       return res.data;
     },
     enabled: !!currentRosterId,
@@ -112,17 +151,32 @@ export function RosterPage() {
       queryClient.invalidateQueries({ queryKey: ['roster'] });
       queryClient.invalidateQueries({ queryKey: ['roster-entries'] });
       queryClient.invalidateQueries({ queryKey: ['roster-conflicts'] });
+      queryClient.invalidateQueries({ queryKey: ['roster-view-data'] });
     },
   });
 
+  const [editConflictMessage, setEditConflictMessage] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+
   const updateEntryMutation = useMutation({
-    mutationFn: async ({ entryId, status, isLocked, note }: { entryId: string; status: string; isLocked?: boolean; note?: string }) => {
-      await api.put(`/rosters/${currentRosterId}/entries/${entryId}`, { status, isLocked, note });
+    mutationFn: async ({ entryId, status }: { entryId: string; status: string }) => {
+      const res = await api.put<{ entry: RosterEntry; conflictCount: number; errorCount: number; conflictDelta: number }>(`/rosters/${currentRosterId}/entries/${entryId}`, { status });
+      return res.data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['roster-entries', currentRosterId] });
       queryClient.invalidateQueries({ queryKey: ['roster-conflicts', currentRosterId] });
       setEditingCell(null);
+
+      const oldCount = data.conflictCount - data.conflictDelta;
+      if (data.conflictDelta !== 0) {
+        setEditConflictMessage(`Conflicts: ${oldCount} → ${data.conflictCount} (${data.conflictDelta > 0 ? '+' : ''}${data.conflictDelta})`);
+        setTimeout(() => setEditConflictMessage(null), 5000);
+      }
+    },
+    onError: (error: Error) => {
+      setEditConflictMessage(error.message || 'Failed to update entry');
+      setTimeout(() => setEditConflictMessage(null), 5000);
     },
   });
 
@@ -133,12 +187,13 @@ export function RosterPage() {
     },
     onSuccess: (data) => {
       if (data.applied) {
-        alert(`Repair applied: ${data.changes?.length || 0} changes made`);
+        setStatusMessage(`Repair applied: ${data.changes?.length || 0} changes made`);
         queryClient.invalidateQueries({ queryKey: ['roster-entries', currentRosterId] });
         queryClient.invalidateQueries({ queryKey: ['roster-conflicts', currentRosterId] });
       } else {
-        alert(`Repair not applied: ${data.reason}`);
+        setStatusMessage(`Repair not applied: ${data.reason}`);
       }
+      setTimeout(() => setStatusMessage(null), 5000);
     },
   });
 
@@ -148,7 +203,8 @@ export function RosterPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roster', currentRosterId] });
-      alert('Approval requested');
+      setStatusMessage('Approval requested');
+      setTimeout(() => setStatusMessage(null), 5000);
     },
   });
 
@@ -158,7 +214,8 @@ export function RosterPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['roster', currentRosterId] });
-      alert('Roster approved and published');
+      setStatusMessage('Roster approved and published');
+      setTimeout(() => setStatusMessage(null), 5000);
     },
   });
 
@@ -184,7 +241,7 @@ export function RosterPage() {
 
   const getEntriesGrouped = () => {
     const grouped = new Map<string, Map<number, RosterEntry>>();
-    (entries || []).forEach((entry: RosterEntry) => {
+    (entries || []).forEach((entry) => {
       const day = new Date(entry.date).getDate();
       if (!grouped.has(entry.employeeId)) {
         grouped.set(entry.employeeId, new Map());
@@ -196,6 +253,7 @@ export function RosterPage() {
 
   const handleCellClick = (entry: RosterEntry, day: number, empIndex: number) => {
     if (entry.isLocked) return;
+    if (viewMode !== 'company' && viewMode !== 'pod') return;
     setEditingCell({ entryId: entry.id, x: day, y: empIndex });
   };
 
@@ -203,19 +261,331 @@ export function RosterPage() {
     updateEntryMutation.mutate({ entryId, status: newStatus });
   };
 
+  const handleDayClick = (day: number) => {
+    setSelectedDay(selectedDay === day ? null : day);
+  };
+
   const uniqueEmployees = new Map<string, RosterEntry['employee']>();
-  (entries || []).forEach((e: RosterEntry) => {
+  (entries || []).forEach((e) => {
     if (!uniqueEmployees.has(e.employee.id)) {
       uniqueEmployees.set(e.employee.id, e.employee);
     }
   });
-  const employees = Array.from(uniqueEmployees.values()).sort(
-    (a, b) => a.name.localeCompare(b.name)
-  );
+  const allEmployees = Array.from(uniqueEmployees.values()).sort((a, b) => a.name.localeCompare(b.name));
   const days = getDaysInMonth();
   const entriesGrouped = getEntriesGrouped();
-  const errorConflicts = (conflicts || []).filter((c: Conflict) => c.severity === 'ERROR');
-  const warningConflicts = (conflicts || []).filter((c: Conflict) => c.severity === 'WARNING');
+  const errorConflicts = (conflicts || []).filter((c) => c.severity === 'ERROR');
+  const warningConflicts = (conflicts || []).filter((c) => c.severity === 'WARNING');
+
+  const pods = Array.from(new Set(viewData?.employees.map((e) => e.podName) || [])).sort();
+  const brands = Array.from(new Set(viewData?.brandProcesses.map((bp) => bp.brandName) || [])).sort();
+  const processes = Array.from(new Set(viewData?.brandProcesses.map((bp) => bp.processName) || [])).sort();
+
+  if (!selectedPod && pods.length > 0) setSelectedPod(pods[0]);
+  if (!selectedBrand && brands.length > 0) setSelectedBrand(brands[0]);
+  if (!selectedProcess && processes.length > 0) setSelectedProcess(processes[0]);
+  if (!selectedEmployee && allEmployees.length > 0) setSelectedEmployee(allEmployees[0].id);
+
+  const getEmployeesForView = () => {
+    if (viewMode === 'company') return allEmployees;
+    if (viewMode === 'pod') {
+      const podEmployees = allEmployees.filter((e) => e.pod.name === selectedPod);
+      return podEmployees.sort((a, b) => {
+        const aLead = viewData?.employees.find((ve) => ve.id === a.id)?.isPodLead;
+        const bLead = viewData?.employees.find((ve) => ve.id === b.id)?.isPodLead;
+        if (aLead && !bLead) return -1;
+        if (!aLead && bLead) return 1;
+        return a.name.localeCompare(b.name);
+      });
+    }
+    if (viewMode === 'brand') {
+      const bpIds = viewData?.brandProcesses.filter((bp) => bp.brandName === selectedBrand).map((bp) => bp.id) || [];
+      const empIds = new Set<string>();
+      bpIds.forEach((bpId) => {
+        const bp = viewData?.brandProcesses.find((b) => b.id === bpId);
+        bp?.assignedEmployeeIds.forEach((id) => empIds.add(id));
+      });
+      return allEmployees.filter((e) => empIds.has(e.id));
+    }
+    if (viewMode === 'process') {
+      const bpIds = viewData?.brandProcesses.filter((bp) => bp.processName === selectedProcess).map((bp) => bp.id) || [];
+      const empIds = new Set<string>();
+      bpIds.forEach((bpId) => {
+        const bp = viewData?.brandProcesses.find((b) => b.id === bpId);
+        bp?.assignedEmployeeIds.forEach((id) => empIds.add(id));
+      });
+      return allEmployees.filter((e) => empIds.has(e.id));
+    }
+    return allEmployees;
+  };
+
+  const getWorkingCountForDay = (emps: RosterEntry['employee'][], day: number) => {
+    return emps.filter((e) => entriesGrouped.get(e.id)?.get(day)?.status === 'WORKING').length;
+  };
+
+  const getEmployeeStatusCounts = (empId: string) => {
+    const empEntries = entriesGrouped.get(empId);
+    if (!empEntries) return { WORKING: 0, WEEKLY_OFF: 0, LEAVE: 0, HOLIDAY: 0, COMP_OFF: 0 };
+    const counts = { WORKING: 0, WEEKLY_OFF: 0, LEAVE: 0, HOLIDAY: 0, COMP_OFF: 0 };
+    empEntries.forEach((entry) => {
+      counts[entry.status]++;
+    });
+    return counts;
+  };
+
+  const getDayConflicts = (day: number) => {
+    const dateStr = new Date(year, month - 1, day).toISOString().split('T')[0];
+    return (conflicts || []).filter((c) => c.date && c.date.startsWith(dateStr));
+  };
+
+  const getDayWorkingEmployees = (day: number) => {
+    const working: string[] = [];
+    entriesGrouped.forEach((dayMap, empId) => {
+      if (dayMap.get(day)?.status === 'WORKING') {
+        const emp = allEmployees.find((e) => e.id === empId);
+        if (emp) working.push(emp.name);
+      }
+    });
+    return working;
+  };
+
+  const renderEmployeeView = () => {
+    if (!selectedEmployee) return null;
+    const emp = allEmployees.find((e) => e.id === selectedEmployee);
+    if (!emp) return null;
+    const empEntries = entriesGrouped.get(selectedEmployee);
+    const counts = getEmployeeStatusCounts(selectedEmployee);
+    const empBPs = viewData?.brandProcesses.filter((bp) => bp.assignedEmployeeIds.includes(selectedEmployee)) || [];
+
+    return (
+      <div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">Select Employee:</label>
+          <select
+            value={selectedEmployee}
+            onChange={(e) => setSelectedEmployee(e.target.value)}
+            className="px-3 py-2 border border-gray-300 rounded-md"
+          >
+            {allEmployees.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.code} - {e.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="mb-4">
+            <h3 className="text-lg font-semibold">{emp.name}</h3>
+            <p className="text-sm text-gray-500">Pod: {emp.pod.name}</p>
+          </div>
+          <div className="mb-4 flex gap-4">
+            <div className="text-sm"><span className="font-medium">Working:</span> {counts.WORKING}</div>
+            <div className="text-sm"><span className="font-medium">Weekly Off:</span> {counts.WEEKLY_OFF}</div>
+            <div className="text-sm"><span className="font-medium">Leave:</span> {counts.LEAVE}</div>
+            <div className="text-sm"><span className="font-medium">Holiday:</span> {counts.HOLIDAY}</div>
+            <div className="text-sm"><span className="font-medium">Comp Off:</span> {counts.COMP_OFF}</div>
+          </div>
+          <div className="mb-4">
+            <h4 className="text-sm font-medium mb-2">Assigned Brand-Processes:</h4>
+            <div className="text-sm text-gray-600">
+              {empBPs.length > 0 ? empBPs.map((bp) => `${bp.brandName} - ${bp.processName}`).join(', ') : 'None'}
+            </div>
+          </div>
+          <div className="grid grid-cols-7 gap-2">
+            {days.map((day) => {
+              const entry = empEntries?.get(day);
+              return (
+                <div key={day} className="text-center border rounded p-2">
+                  <div className="text-xs font-medium text-gray-500 mb-1">{day}</div>
+                  {entry && (
+                    <div className={`text-xs px-2 py-1 rounded ${statusColors[entry.status]}`}>
+                      {statusShort[entry.status]}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderCompanyOrPodView = () => {
+    const empsToShow = getEmployeesForView();
+
+    return (
+      <div>
+        {viewMode === 'pod' && (
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Select Pod:</label>
+            <select
+              value={selectedPod}
+              onChange={(e) => setSelectedPod(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md"
+            >
+              {pods.map((pod) => (
+                <option key={pod} value={pod}>
+                  {pod}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full border-collapse">
+              <thead>
+                <tr className="border-b border-gray-200 bg-gray-50">
+                  <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r w-48">
+                    Employee
+                  </th>
+                  {days.map((day) => (
+                    <th
+                      key={day}
+                      onClick={() => handleDayClick(day)}
+                      className={`px-2 py-3 text-center text-xs font-medium min-w-[40px] cursor-pointer hover:bg-gray-100 ${
+                        selectedDay === day ? 'bg-blue-100 text-blue-700' : 'text-gray-500'
+                      }`}
+                    >
+                      {day}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 bg-white">
+                {empsToShow.map((employee, empIdx) => (
+                  <tr key={employee.id} className="hover:bg-gray-50">
+                    <td className="sticky left-0 bg-white z-10 px-4 py-3 text-sm font-medium text-gray-900 border-r">
+                      <div className="text-sm font-medium text-gray-900">{employee.name}</div>
+                      <div className="text-xs text-gray-500">{employee.pod?.name || 'No Pod'}</div>
+                    </td>
+                    {days.map((day) => {
+                      const entry = entriesGrouped.get(employee.id)?.get(day);
+                      if (!entry) return <td key={day} className="px-2 py-3"></td>;
+                      
+                      const isEditing = editingCell?.entryId === entry.id;
+                      
+                      return (
+                        <td key={day} className={`px-1 py-2 text-center relative ${selectedDay === day ? 'bg-blue-50' : ''}`}>
+                          {isEditing ? (
+                            <select
+                              autoFocus
+                              value={entry.status}
+                              onChange={(e) => handleStatusChange(entry.id, e.target.value)}
+                              onBlur={() => setEditingCell(null)}
+                              className="w-full px-1 py-1 text-xs border border-blue-500 rounded"
+                            >
+                              {statusOptions.map((opt) => (
+                                <option key={opt.value} value={opt.value}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <button
+                              onClick={() => handleCellClick(entry, day, empIdx)}
+                              disabled={entry.isLocked}
+                              className={`w-full px-2 py-1 rounded text-xs font-medium border transition-colors ${
+                                statusColors[entry.status]
+                              } ${entry.isLocked ? 'opacity-50 cursor-not-allowed ring-2 ring-gray-400' : 'hover:opacity-80 cursor-pointer'}`}
+                              title={entry.note || `${entry.status}${entry.isLocked ? ' (locked)' : ''}`}
+                            >
+                              {statusShort[entry.status]}
+                            </button>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+                <tr className="bg-gray-50 font-medium">
+                  <td className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-sm border-r">Working Count</td>
+                  {days.map((day) => (
+                    <td key={day} className={`px-2 py-3 text-center text-sm ${selectedDay === day ? 'bg-blue-100' : ''}`}>
+                      {getWorkingCountForDay(empsToShow, day)}
+                    </td>
+                  ))}
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderBrandOrProcessView = () => {
+    const isBrand = viewMode === 'brand';
+    const selectedValue = isBrand ? selectedBrand : selectedProcess;
+    const options = isBrand ? brands : processes;
+    const bpsForSelection = viewData?.brandProcesses.filter((bp) =>
+      isBrand ? bp.brandName === selectedValue : bp.processName === selectedValue
+    ) || [];
+
+    return (
+      <div>
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Select {isBrand ? 'Brand' : 'Process'}:
+          </label>
+          <select
+            value={selectedValue}
+            onChange={(e) => (isBrand ? setSelectedBrand(e.target.value) : setSelectedProcess(e.target.value))}
+            className="px-3 py-2 border border-gray-300 rounded-md"
+          >
+            {options.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-6">
+          {bpsForSelection.map((bp) => {
+            const emps = allEmployees.filter((e) => bp.assignedEmployeeIds.includes(e.id));
+            const groupLabel = isBrand ? bp.processName : bp.brandName;
+
+            return (
+              <div key={bp.id} className="bg-white rounded-lg border border-gray-200 p-4">
+                <h3 className="text-md font-semibold mb-2">{groupLabel}</h3>
+                <p className="text-sm text-gray-600 mb-3">Min Coverage: {bp.defaultMinCoverage}</p>
+                <div className="mb-3 text-sm text-gray-700">
+                  <strong>Assigned:</strong> {emps.map((e) => e.name).join(', ') || 'None'}
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left py-2 px-2">Day</th>
+                        {days.map((day) => (
+                          <th key={day} className="text-center py-2 px-1">{day}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="py-2 px-2 font-medium">Coverage</td>
+                        {days.map((day) => {
+                          const working = emps.filter((e) => entriesGrouped.get(e.id)?.get(day)?.status === 'WORKING').length;
+                          const isUnder = working < bp.defaultMinCoverage;
+                          return (
+                            <td key={day} className={`text-center py-2 px-1 ${isUnder ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                              {working}/{bp.defaultMinCoverage}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="p-8">
@@ -277,8 +647,20 @@ export function RosterPage() {
         </div>
       </div>
 
+      {editConflictMessage && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md text-sm text-blue-800">
+          {editConflictMessage}
+        </div>
+      )}
+
+      {statusMessage && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md text-sm text-green-800">
+          {statusMessage}
+        </div>
+      )}
+
       <div className="mb-4 flex gap-2">
-        {(['employee', 'pod', 'brand', 'process', 'company'] as ViewMode[]).map((mode) => (
+        {(['company', 'pod', 'brand', 'process', 'employee'] as ViewMode[]).map((mode) => (
           <button
             key={mode}
             onClick={() => setViewMode(mode)}
@@ -306,7 +688,7 @@ export function RosterPage() {
             </div>
           </div>
           <div className="p-6 space-y-3">
-            {(conflicts || []).map((conflict: Conflict) => (
+            {(conflicts || []).map((conflict) => (
               <div
                 key={conflict.id}
                 className={`p-4 rounded-md border ${
@@ -333,7 +715,7 @@ export function RosterPage() {
                   <div className="mt-2 text-xs text-gray-600">
                     <strong>Suggestions:</strong>
                     <ul className="list-disc list-inside ml-2 mt-1">
-                      {conflict.suggestedActions.map((action: { description: string }, idx: number) => (
+                      {conflict.suggestedActions.map((action, idx) => (
                         <li key={idx}>{action.description}</li>
                       ))}
                     </ul>
@@ -348,71 +730,33 @@ export function RosterPage() {
         </div>
       )}
 
-      {currentRosterId && entries && entries.length > 0 ? (
-        <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-gray-200 bg-gray-50">
-                  <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase border-r w-48">
-                    Employee
-                  </th>
-                  {days.map((day) => (
-                    <th key={day} className="px-2 py-3 text-center text-xs font-medium text-gray-500 min-w-[40px]">
-                      {day}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200 bg-white">
-                {employees.map((employee: RosterEntry['employee'], empIdx: number) => (
-                  <tr key={employee.id} className="hover:bg-gray-50">
-                    <td className="sticky left-0 bg-white z-10 px-4 py-3 text-sm font-medium text-gray-900 border-r">
-                      <div className="text-sm font-medium text-gray-900">{employee.name}</div>
-                      <div className="text-xs text-gray-500">{employee.pod?.name || 'No Pod'}</div>
-                    </td>
-                    {days.map((day) => {
-                      const entry = entriesGrouped.get(employee.id)?.get(day);
-                      if (!entry) return <td key={day} className="px-2 py-3"></td>;
-                      
-                      const isEditing = editingCell?.entryId === entry.id;
-                      
-                      return (
-                        <td key={day} className="px-1 py-2 text-center relative">
-                          {isEditing ? (
-                            <select
-                              autoFocus
-                              value={entry.status}
-                              onChange={(e) => handleStatusChange(entry.id, e.target.value)}
-                              onBlur={() => setEditingCell(null)}
-                              className="w-full px-1 py-1 text-xs border border-blue-500 rounded"
-                            >
-                              {statusOptions.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <button
-                              onClick={() => handleCellClick(entry, day, empIdx)}
-                              disabled={entry.isLocked}
-                              className={`w-full px-2 py-1 rounded text-xs font-medium border transition-colors ${
-                                statusColors[entry.status]
-                              } ${entry.isLocked ? 'opacity-50 cursor-not-allowed ring-2 ring-gray-400' : 'hover:opacity-80 cursor-pointer'}`}
-                              title={entry.note || `${entry.status}${entry.isLocked ? ' (locked)' : ''}`}
-                            >
-                              {statusShort[entry.status]}
-                            </button>
-                          )}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {selectedDay !== null && viewMode === 'company' && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex justify-between items-start mb-2">
+            <h3 className="font-semibold">Day {selectedDay} Details</h3>
+            <button onClick={() => setSelectedDay(null)} className="text-blue-600 hover:text-blue-800 text-sm">
+              Close
+            </button>
           </div>
+          <div className="text-sm mb-2">
+            <strong>Working:</strong> {getDayWorkingEmployees(selectedDay).join(', ') || 'None'}
+          </div>
+          <div className="text-sm">
+            <strong>Under-covered brand-processes:</strong>
+            {getDayConflicts(selectedDay).filter((c) => c.code.includes('COVERAGE')).length > 0
+              ? getDayConflicts(selectedDay)
+                  .filter((c) => c.code.includes('COVERAGE'))
+                  .map((c, i) => <div key={i} className="text-xs text-red-700 mt-1">{c.message}</div>)
+              : ' None'}
+          </div>
+        </div>
+      )}
+
+      {currentRosterId && entries && entries.length > 0 ? (
+        <div>
+          {viewMode === 'employee' && renderEmployeeView()}
+          {(viewMode === 'company' || viewMode === 'pod') && renderCompanyOrPodView()}
+          {(viewMode === 'brand' || viewMode === 'process') && renderBrandOrProcessView()}
         </div>
       ) : (
         <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">

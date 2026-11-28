@@ -5,4 +5,10 @@ export const createBrandSchema = z.object({
   code: z.string(),
 });
 
+export const updateBrandSchema = z.object({
+  name: z.string().optional(),
+  code: z.string().optional(),
+});
+
 export type CreateBrandInput = z.infer<typeof createBrandSchema>;
+export type UpdateBrandInput = z.infer<typeof updateBrandSchema>;

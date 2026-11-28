@@ -82,3 +82,13 @@ export async function exportCSV(req: Request, res: Response) {
   res.setHeader('Content-Disposition', `attachment; filename=roster-${req.params.id}.csv`);
   res.send(csv);
 }
+
+export async function getViewData(req: Request, res: Response) {
+  const data = await rosterService.getRosterViewData(req.params.id);
+  res.json(data);
+}
+
+export async function revalidateRoster(req: Request, res: Response) {
+  const result = await rosterService.revalidateRoster(req.params.id);
+  res.json(result);
+}

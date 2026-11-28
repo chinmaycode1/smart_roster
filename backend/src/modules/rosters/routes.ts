@@ -18,3 +18,5 @@ rosterRoutes.post('/:id/reject', asyncHandler(rosterController.rejectRoster));
 rosterRoutes.get('/:id/audit-logs', asyncHandler(rosterController.getAuditLogs));
 rosterRoutes.get('/:id/compare/:compareToId', asyncHandler(rosterController.compareVersions));
 rosterRoutes.get('/:id/export/csv', asyncHandler(rosterController.exportCSV));
+rosterRoutes.get('/:id/view-data', asyncHandler(rosterController.getViewData));
+rosterRoutes.post('/:id/revalidate', asyncHandler(rosterController.revalidateRoster));

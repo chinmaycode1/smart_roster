@@ -1,6 +1,6 @@
 import { prisma } from '../../lib/prisma.js';
 import { NotFoundError } from '../../lib/errors.js';
-import type { CreateEmployeeInput, UpdateEmployeeInput } from './schema.js';
+import type { CreateEmployeeInput, UpdateEmployeeInput, WeeklyOffPatternInput } from './schema.js';
 
 export async function fetchEmployees() {
   return prisma.employee.findMany({
@@ -67,5 +67,38 @@ export async function updateEmployee(id: string, data: UpdateEmployeeInput) {
   return prisma.employee.update({
     where: { id },
     data,
+  });
+}
+
+export async function fetchWeeklyOffPattern(employeeId: string) {
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+  if (!employee) {
+    throw new NotFoundError(`Employee with id ${employeeId} not found`);
+  }
+
+  return prisma.weeklyOffPattern.findUnique({
+    where: { employeeId },
+  });
+}
+
+export async function upsertWeeklyOffPattern(employeeId: string, data: WeeklyOffPatternInput) {
+  const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+  if (!employee) {
+    throw new NotFoundError(`Employee with id ${employeeId} not found`);
+  }
+
+  return prisma.weeklyOffPattern.upsert({
+    where: { employeeId },
+    create: {
+      employeeId,
+      preferredOffDays: data.preferredOffDays,
+      fixedOffDays: data.fixedOffDays,
+      isFixed: data.isFixed,
+    },
+    update: {
+      preferredOffDays: data.preferredOffDays,
+      fixedOffDays: data.fixedOffDays,
+      isFixed: data.isFixed,
+    },
   });
 }

@@ -7,6 +7,8 @@ import {
   Calendar,
   BarChart3,
   Settings,
+  CalendarDays,
+  UserCog,
 } from 'lucide-react';
 import { Logo } from '../components/brand/Logo';
 
@@ -16,7 +18,9 @@ const navItems = [
   { path: '/pods', label: 'Pods', icon: Boxes },
   { path: '/processes', label: 'Processes', icon: Settings },
   { path: '/brands', label: 'Brands', icon: FileText },
+  { path: '/assignments', label: 'Assignments', icon: UserCog },
   { path: '/roster', label: 'Roster', icon: Calendar },
+  { path: '/availability', label: 'Availability', icon: CalendarDays },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
 ];
 

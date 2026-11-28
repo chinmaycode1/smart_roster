@@ -44,8 +44,38 @@ export interface BrandProcess {
   id: string;
   brandId: string;
   processId: string;
+  operatingRuleId: string;
+  defaultMinCoverage: number;
   brand?: Brand;
   process?: Process;
+  operatingRule?: OperatingRule;
+  assignments?: AssignmentWithEmployee[];
+}
+
+export interface OperatingRule {
+  id: string;
+  name: string;
+  type: string;
+  workingWeekdays: number[];
+  worksOnHolidays: boolean;
+}
+
+export interface CoverageOverride {
+  id: string;
+  brandProcessId: string;
+  date?: string;
+  weekday?: number;
+  minCoverage: number;
+  reason?: string;
+  brandProcess?: BrandProcess;
+}
+
+export interface WeeklyOffPattern {
+  id: string;
+  employeeId: string;
+  preferredOffDays: number[];
+  fixedOffDays: number[];
+  isFixed: boolean;
 }
 
 export interface Employee {
@@ -64,7 +94,27 @@ export interface Employee {
 
 export interface Assignment {
   id: string;
+  employeeId: string;
+  brandProcessId: string;
   allocationPercent: number;
   isPrimary: boolean;
+  startDate?: string;
+  endDate?: string;
   brandProcess?: BrandProcess;
+  employee?: Employee;
+}
+
+export interface AssignmentWithEmployee extends Assignment {
+  employee: {
+    id: string;
+    code: string;
+    name: string;
+    email: string;
+    role: string;
+    isActive: boolean;
+    pod?: {
+      id: string;
+      name: string;
+    };
+  };
 }

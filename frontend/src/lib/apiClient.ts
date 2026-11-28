@@ -1,6 +1,15 @@
 import type { DashboardSummary, Employee } from '../types/api';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+function normalizeBaseURL(url: string): string {
+  let base = url || 'http://localhost:4000';
+  base = base.replace(/\/+$/, '');
+  if (base.endsWith('/api')) {
+    base = base.slice(0, -4);
+  }
+  return base;
+}
+
+const API_BASE = normalizeBaseURL(import.meta.env.VITE_API_URL);
 
 export async function apiRequest<T>(
   endpoint: string,
@@ -19,7 +28,8 @@ export async function apiRequest<T>(
     const error = await response.json().catch(() => ({
       error: { message: 'Request failed' },
     }));
-    throw new Error(error.error?.message || 'Request failed');
+    const message = error.error?.message || error.message || 'Request failed';
+    throw new Error(message);
   }
 
   const data = await response.json();

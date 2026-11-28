@@ -16,5 +16,12 @@ export const updateEmployeeSchema = z.object({
   maxConsecutiveWorkDays: z.number().optional(),
 });
 
+export const weeklyOffPatternSchema = z.object({
+  preferredOffDays: z.array(z.number().int().min(0).max(6)),
+  fixedOffDays: z.array(z.number().int().min(0).max(6)),
+  isFixed: z.boolean(),
+});
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
+export type WeeklyOffPatternInput = z.infer<typeof weeklyOffPatternSchema>;

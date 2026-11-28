@@ -8,6 +8,8 @@ import { ProcessesPage } from '../features/processes/ProcessesPage';
 import { BrandsPage } from '../features/brands/BrandsPage';
 import { RosterPage } from '../features/roster/RosterPage';
 import { ReportsPage } from '../features/reports/ReportsPage';
+import { AvailabilityPage } from '../features/availability/AvailabilityPage';
+import { AssignmentsPage } from '../features/assignments/AssignmentsPage';
 
 export default function App() {
   return (
@@ -19,8 +21,10 @@ export default function App() {
           <Route path="/pods" element={<PodsPage />} />
           <Route path="/processes" element={<ProcessesPage />} />
           <Route path="/brands" element={<BrandsPage />} />
+          <Route path="/assignments" element={<AssignmentsPage />} />
           <Route path="/roster" element={<RosterPage />} />
           <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/availability" element={<AvailabilityPage />} />
         </Routes>
       </AppShell>
     </ErrorBoundary>
