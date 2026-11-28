@@ -172,8 +172,9 @@ export function RosterPage() {
       queryClient.invalidateQueries({ queryKey: ['roster-conflicts'] });
       queryClient.invalidateQueries({ queryKey: ['roster-view-data'] });
     },
-    onError: (error: any) => {
-      setErrorMessage(error.response?.data?.error || error.message || 'Failed to generate roster');
+    onError: (error: unknown) => {
+      const err = error as { response?: { data?: { error?: string } }; message?: string };
+      setErrorMessage(err.response?.data?.error || err.message || 'Failed to generate roster');
     },
   });
 

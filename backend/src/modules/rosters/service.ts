@@ -183,8 +183,9 @@ export async function generateRoster(data: { month: number; year: number; parent
   try {
     const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion));
     return { roster, conflicts: result.conflicts };
-  } catch (error: any) {
-    if (error.code === 'P2002') {
+  } catch (error: unknown) {
+    const err = error as { code?: string };
+    if (err.code === 'P2002') {
       nextVersion = await computeNextVersion();
       const roster = await prisma.$transaction((tx) => createRoster(tx, nextVersion));
       return { roster, conflicts: result.conflicts };
