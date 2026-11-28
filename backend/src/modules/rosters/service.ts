@@ -103,10 +103,10 @@ async function loadGenerationContext(month: number, year: number): Promise<Gener
   };
 }
 
-async function saveEntriesChunked(rosterId: string, entries: RosterEntryData[], chunkSize = 500) {
+async function saveEntriesChunked(rosterId: string, entries: RosterEntryData[], chunkSize = 500, client: Prisma.TransactionClient | typeof prisma = prisma) {
   for (let i = 0; i < entries.length; i += chunkSize) {
     const chunk = entries.slice(i, i + chunkSize);
-    await prisma.rosterEntry.createMany({
+    await client.rosterEntry.createMany({
       data: chunk.map((entry) => ({
         rosterId,
         employeeId: entry.employeeId,
@@ -142,7 +142,7 @@ export async function generateRoster(data: { month: number; year: number; parent
       },
     });
 
-    await saveEntriesChunked(newRoster.id, result.entries);
+    await saveEntriesChunked(newRoster.id, result.entries, 500, tx);
 
     if (result.conflicts.length > 0) {
       const conflictsData = result.conflicts.map((c) => ({
@@ -205,7 +205,27 @@ export async function getRosterEntries(rosterId: string) {
 }
 
 export async function updateEntry(entryId: string, data: { status: string; isLocked?: boolean; note?: string }) {
-  return prisma.rosterEntry.update({
+  const entry = await prisma.rosterEntry.findUnique({
+    where: { id: entryId },
+    include: { roster: true },
+  });
+  if (!entry) throw new Error('Entry not found');
+
+  if (entry.isLocked) {
+    const error = new Error('Cannot edit locked entry') as Error & { statusCode: number };
+    error.statusCode = 409;
+    throw error;
+  }
+
+  if (entry.roster.status === 'PUBLISHED') {
+    const error = new Error('Cannot edit published roster') as Error & { statusCode: number };
+    error.statusCode = 409;
+    throw error;
+  }
+
+  const oldConflictCount = await prisma.conflict.count({ where: { rosterId: entry.rosterId } });
+
+  const updated = await prisma.rosterEntry.update({
     where: { id: entryId },
     data: {
       status: data.status as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF',
@@ -214,6 +234,62 @@ export async function updateEntry(entryId: string, data: { status: string; isLoc
       source: 'MANUAL',
     },
   });
+
+  const context = await loadGenerationContext(entry.roster.month, entry.roster.year);
+  const allEntries = await prisma.rosterEntry.findMany({ where: { rosterId: entry.rosterId } });
+
+  const conflicts = validateRoster(
+    allEntries.map((e) => ({
+      employeeId: e.employeeId,
+      date: e.date,
+      status: e.status,
+      source: e.source as 'GENERATED' | 'MANUAL',
+      isLocked: e.isLocked,
+      note: e.note || undefined,
+    })),
+    context
+  );
+
+  await prisma.$transaction(async (tx) => {
+    await tx.conflict.deleteMany({ where: { rosterId: entry.rosterId } });
+
+    if (conflicts.length > 0) {
+      const conflictsData = conflicts.map((c) => ({
+        rosterId: entry.rosterId,
+        severity: c.severity,
+        code: c.code,
+        brandProcessId: c.brandProcessId,
+        employeeId: c.employeeId,
+        date: c.date,
+        message: c.message,
+        suggestedActions: JSON.stringify(c.suggestedActions),
+      }));
+      for (let i = 0; i < conflictsData.length; i += 500) {
+        await tx.conflict.createMany({ data: conflictsData.slice(i, i + 500) });
+      }
+    }
+
+    await tx.auditLog.create({
+      data: {
+        entityType: 'RosterEntry',
+        entityId: entryId,
+        action: 'UPDATE',
+        actorRole: 'EMPLOYEE',
+        before: { status: entry.status },
+        after: { status: data.status },
+      },
+    });
+  });
+
+  const errorCount = conflicts.filter(c => c.severity === 'ERROR').length;
+  const conflictDelta = conflicts.length - oldConflictCount;
+
+  return {
+    entry: updated,
+    conflictCount: conflicts.length,
+    errorCount,
+    conflictDelta,
+  };
 }
 
 export async function analyzeChangeImpact(rosterId: string, change: { entryId: string; newStatus: string }) {
@@ -246,6 +322,96 @@ export async function analyzeChangeImpact(rosterId: string, change: { entryId: s
   const conflictDelta = conflicts.length - oldConflictCount;
 
   return { affectedDates: [entry.date], newConflicts: conflicts, conflictDelta };
+}
+
+export async function revalidateRoster(rosterId: string) {
+  const roster = await prisma.roster.findUnique({ where: { id: rosterId } });
+  if (!roster) {
+    return {
+      before: { errors: 0, warnings: 0 },
+      after: { errors: 0, warnings: 0 },
+      newConflicts: [],
+    };
+  }
+
+  // Get conflicts before revalidation
+  const conflictsBefore = await prisma.conflict.findMany({
+    where: { rosterId },
+    select: { code: true, severity: true, brandProcessId: true, employeeId: true, date: true, message: true },
+  });
+
+  const errorsBefore = conflictsBefore.filter((c) => c.severity === 'ERROR').length;
+  const warningsBefore = conflictsBefore.filter((c) => c.severity === 'WARNING').length;
+
+  // Reload context (which now includes the new/updated leave)
+  const context = await loadGenerationContext(roster.month, roster.year);
+  const entries = await prisma.rosterEntry.findMany({ where: { rosterId } });
+
+  // Re-run validation
+  const newConflicts = validateRoster(
+    entries.map((e) => ({
+      employeeId: e.employeeId,
+      date: e.date,
+      status: e.status as 'WORKING' | 'WEEKLY_OFF' | 'LEAVE' | 'HOLIDAY' | 'COMP_OFF',
+      source: e.source as 'GENERATED' | 'MANUAL',
+      isLocked: e.isLocked,
+      note: e.note || undefined,
+    })),
+    context
+  );
+
+  const errorsAfter = newConflicts.filter((c) => c.severity === 'ERROR').length;
+  const warningsAfter = newConflicts.filter((c) => c.severity === 'WARNING').length;
+
+  // Find truly new conflicts (not present before)
+  const beforeSet = new Set(
+    conflictsBefore.map((c) => 
+      `${c.code}_${c.employeeId || ''}_${c.brandProcessId || ''}_${c.date?.toISOString().split('T')[0] || ''}`
+    )
+  );
+
+  const conflictsToReturn = newConflicts.filter((c) => {
+    const key = `${c.code}_${c.employeeId || ''}_${c.brandProcessId || ''}_${c.date?.toISOString().split('T')[0] || ''}`;
+    return !beforeSet.has(key);
+  });
+
+  // If roster is published, return impact only without mutating
+  if (roster.status === 'PUBLISHED') {
+    return {
+      before: { errors: errorsBefore, warnings: warningsBefore },
+      after: { errors: errorsAfter, warnings: warningsAfter },
+      newConflicts: conflictsToReturn,
+    };
+  }
+
+  // Store all new conflicts in DB
+  await prisma.$transaction(async (tx) => {
+    // Clear old conflicts
+    await tx.conflict.deleteMany({ where: { rosterId } });
+
+    // Insert new conflicts
+    if (newConflicts.length > 0) {
+      const conflictsData = newConflicts.map((c) => ({
+        rosterId,
+        severity: c.severity,
+        code: c.code,
+        brandProcessId: c.brandProcessId || null,
+        employeeId: c.employeeId || null,
+        date: c.date || null,
+        message: c.message,
+        suggestedActions: JSON.stringify(c.suggestedActions),
+      }));
+      for (let i = 0; i < conflictsData.length; i += 500) {
+        await tx.conflict.createMany({ data: conflictsData.slice(i, i + 500) });
+      }
+    }
+  });
+
+  return {
+    before: { errors: errorsBefore, warnings: warningsBefore },
+    after: { errors: errorsAfter, warnings: warningsAfter },
+    newConflicts: conflictsToReturn,
+  };
 }
 
 export async function repairRoster(rosterId: string) {
@@ -441,4 +607,103 @@ export async function exportRosterCSV(rosterId: string) {
   }
 
   return rows.map((r) => r.join(',')).join('\n');
+}
+
+export async function getRosterViewData(rosterId: string) {
+  const roster = await prisma.roster.findUnique({ where: { id: rosterId } });
+  if (!roster) throw new Error('Roster not found');
+
+  const entries = await prisma.rosterEntry.findMany({
+    where: { rosterId },
+    include: {
+      employee: {
+        include: {
+          pod: true,
+          assignments: {
+            include: {
+              brandProcess: {
+                include: {
+                  brand: true,
+                  process: true,
+                  operatingRule: true,
+                  coverageOverrides: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+
+  const employees = new Map<string, {
+    id: string;
+    code: string;
+    name: string;
+    podId: string;
+    podName: string;
+    podCode: string;
+    isPodLead: boolean;
+  }>();
+
+  entries.forEach((e) => {
+    if (!employees.has(e.employee.id)) {
+      employees.set(e.employee.id, {
+        id: e.employee.id,
+        code: e.employee.code,
+        name: e.employee.name,
+        podId: e.employee.podId,
+        podName: e.employee.pod.name,
+        podCode: e.employee.pod.id,
+        isPodLead: e.employee.pod.leadEmployeeId === e.employee.id,
+      });
+    }
+  });
+
+  const brandProcessMap = new Map<string, {
+    id: string;
+    brandId: string;
+    brandName: string;
+    brandCode: string;
+    processId: string;
+    processName: string;
+    processCode: string;
+    operatingRuleType: string;
+    defaultMinCoverage: number;
+    assignedEmployeeIds: string[];
+  }>();
+
+  const allBrandProcesses = await prisma.brandProcess.findMany({
+    include: {
+      brand: true,
+      process: true,
+      operatingRule: true,
+      assignments: {
+        select: { employeeId: true },
+      },
+    },
+  });
+
+  allBrandProcesses.forEach((bp) => {
+    brandProcessMap.set(bp.id, {
+      id: bp.id,
+      brandId: bp.brandId,
+      brandName: bp.brand.name,
+      brandCode: bp.brand.code,
+      processId: bp.processId,
+      processName: bp.process.name,
+      processCode: bp.process.code,
+      operatingRuleType: bp.operatingRule.type,
+      defaultMinCoverage: bp.defaultMinCoverage,
+      assignedEmployeeIds: bp.assignments.map((a) => a.employeeId),
+    });
+  });
+
+  const holidays = await prisma.publicHoliday.findMany();
+
+  return {
+    employees: Array.from(employees.values()),
+    brandProcesses: Array.from(brandProcessMap.values()),
+    holidays: holidays.map((h) => ({ date: h.date.toISOString().split('T')[0] })),
+  };
 }
